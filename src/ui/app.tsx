@@ -8,7 +8,6 @@ export type CommandFlags = {
   print?: boolean
   json?: boolean
   apiUrl?: string
-  apiKey?: string
 }
 
 type AppProps = {

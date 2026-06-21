@@ -9,8 +9,8 @@ const cli = meow(
     $ layerbase <command> [options]
 
   Commands
-    login                     Store a Layerbase API key (saved 0600, never echoed)
-    logout                    Remove the stored API key
+    login                     Sign in via your browser; saves a token to ~/.layerbase-cli
+    logout                    Remove the stored credentials
     ls                        List your cloud databases
     connect <db>              Connect with the right client for the engine
     psql <db>                 Connect to a Postgres-family database
@@ -22,7 +22,6 @@ const cli = meow(
     --print                   With connect: show connection info, do not exec
     --json                    With ls: print JSON instead of a table
     --api-url <url>           Cloud API base (env: LAYERBASE_API_URL)
-    --api-key <key>           Non-interactive login (env: LAYERBASE_API_KEY)
 
   Examples
     $ layerbase login
@@ -36,7 +35,6 @@ const cli = meow(
       print: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       apiUrl: { type: 'string' },
-      apiKey: { type: 'string' },
     },
   },
 )
