@@ -20,7 +20,11 @@ pnpm add -g layerbase
 ## Usage
 
 ```bash
+layerbase                          # interactive menu (login / spindb / ...)
+lbase                              # shorter alias - both are installed
+
 layerbase login                    # browser sign-in; saves a token to ~/.layerbase-cli
+layerbase whoami                   # show the signed-in account (--json to script)
 layerbase ls                       # list your cloud databases
 layerbase ls --json                # same, as JSON for scripting
 
@@ -32,10 +36,23 @@ layerbase mysql <db>               # MySQL / MariaDB
 layerbase connect <db> --print     # show connection info, do not exec
 layerbase connection-string <db>   # print the full connstr (reveals password)
 
+layerbase spindb [args...]         # run the local spindb CLI (passes args through)
 layerbase logout                   # remove the stored credentials
 ```
 
 `<db>` accepts a cloud database id or its name.
+
+## Interactive menu and the spindb bridge
+
+Run `layerbase` with no command (on a terminal) for an arrow-key menu:
+log in / out, list cloud databases, or drop into local
+[spindb](https://github.com/robertjbass/spindb). The menu is just sugar over
+the commands above, so everything is still scriptable.
+
+layerbase is the bridge between local spindb and your Layerbase cloud account:
+`layerbase spindb ...` runs the local engine manager (no login needed), while
+the cloud commands work against your account once you `login`. spindb is found
+on your PATH, or run via `npx`/`pnpx`/`bunx` if it is not installed.
 
 ## Why no connection string
 
