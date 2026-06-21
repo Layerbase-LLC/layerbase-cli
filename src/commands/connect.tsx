@@ -12,9 +12,46 @@ type ExecOptions = {
   flags: CommandFlags
 }
 
-// Exec commands hand the TTY to a native client, so they live outside the Ink
-// tree. Ink renders only a transient spinner while the cloud lookup runs, then
-// unmounts before the client takes over the terminal.
+// Resolve a database and hand the TTY to its native client. Returns the client's
+// exit code (or 1 on a resolve/launch error) WITHOUT exiting the process, so it
+// is reusable from both the CLI path and the interactive menu. Ink renders only
+// a transient spinner during the cloud lookup, then unmounts before the client
+// takes over the terminal.
+export async function connectToDatabase(options: {
+  dbRef: string
+  command: string
+  print?: boolean
+}): Promise<number> {
+  const { dbRef, command, print } = options
+
+  const spinner = render(<Connecting label={`Resolving ${dbRef}...`} />)
+  let info
+  try {
+    info = await getConnectionInfo(dbRef)
+  } catch (error) {
+    spinner.unmount()
+    process.stderr.write(`${(error as Error).message}\n`)
+    return 1
+  }
+  spinner.unmount()
+
+  if (print) {
+    printConnectionInfo(info)
+    return 0
+  }
+
+  let plan
+  try {
+    plan = buildLaunchPlan({ info, command })
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`)
+    return 1
+  }
+
+  return runClient(plan)
+}
+
+// CLI entrypoint for connect/psql/redis-cli/mysql: resolve + launch, then exit.
 export async function runExec(options: ExecOptions): Promise<void> {
   const { command, flags } = options
   const dbRef = options.args[0]
@@ -24,31 +61,6 @@ export async function runExec(options: ExecOptions): Promise<void> {
     process.exit(1)
   }
 
-  const spinner = render(<Connecting label={`Resolving ${dbRef}...`} />)
-
-  let info
-  try {
-    info = await getConnectionInfo(dbRef)
-  } catch (error) {
-    spinner.unmount()
-    process.stderr.write(`${(error as Error).message}\n`)
-    process.exit(1)
-  }
-  spinner.unmount()
-
-  if (flags.print) {
-    printConnectionInfo(info)
-    return
-  }
-
-  let plan
-  try {
-    plan = buildLaunchPlan({ info, command })
-  } catch (error) {
-    process.stderr.write(`${(error as Error).message}\n`)
-    process.exit(1)
-  }
-
-  const code = await runClient(plan)
+  const code = await connectToDatabase({ dbRef, command, print: flags.print })
   process.exit(code)
 }
