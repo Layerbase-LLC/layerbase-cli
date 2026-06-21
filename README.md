@@ -37,6 +37,7 @@ layerbase connect <db> --print     # show connection info, do not exec
 layerbase connection-string <db>   # print the full connstr (reveals password)
 
 layerbase spindb [args...]         # run the local spindb CLI (passes args through)
+layerbase alias                    # set up the short `lb` command (only if free)
 layerbase logout                   # remove the stored credentials
 ```
 
@@ -44,15 +45,24 @@ layerbase logout                   # remove the stored credentials
 
 ## Interactive menu and the spindb bridge
 
-Run `layerbase` with no command (on a terminal) for an arrow-key menu:
-log in / out, list cloud databases, or drop into local
-[spindb](https://github.com/robertjbass/spindb). The menu is just sugar over
-the commands above, so everything is still scriptable.
+Run `layerbase` with no command (on a terminal) for an arrow-key menu. It is a
+small hub: each action runs and then the menu returns, so you can sign in, list
+databases, drop into local [spindb](https://github.com/robertjbass/spindb), and
+so on. The menu is just sugar over the commands above, so everything is still
+scriptable.
 
 layerbase is the bridge between local spindb and your Layerbase cloud account:
 `layerbase spindb ...` runs the local engine manager (no login needed), while
 the cloud commands work against your account once you `login`. spindb is found
 on your PATH, or run via `npx`/`pnpx`/`bunx` if it is not installed.
+
+### The `lb` shortcut
+
+The CLI installs as both `layerbase` and `lbase`. For an even shorter `lb`, run
+`layerbase alias` (or pick it from the menu): it creates `lb` next to the
+`layerbase` binary, but **only if `lb` is not already taken** on your system
+(for example Debian's `live-build` ships an `lb`). If it is taken, the CLI
+leaves it alone and suggests a shell alias instead.
 
 ## Why no connection string
 
