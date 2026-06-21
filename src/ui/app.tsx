@@ -1,6 +1,7 @@
 import { Login } from '../commands/login'
 import { Logout } from '../commands/logout'
 import { List } from '../commands/ls'
+import { Whoami } from '../commands/whoami'
 import { ConnectionString } from '../commands/connection-string'
 import { Unknown } from './unknown'
 
@@ -8,7 +9,6 @@ export type CommandFlags = {
   print?: boolean
   json?: boolean
   apiUrl?: string
-  apiKey?: string
 }
 
 type AppProps = {
@@ -25,6 +25,8 @@ export function App({ command, args, flags }: AppProps) {
       return <Logout />
     case 'ls':
       return <List json={flags.json ?? false} />
+    case 'whoami':
+      return <Whoami json={flags.json ?? false} />
     case 'connection-string':
       return <ConnectionString dbRef={args[0]} />
     default:

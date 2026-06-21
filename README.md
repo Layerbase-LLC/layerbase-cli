@@ -20,7 +20,11 @@ pnpm add -g layerbase
 ## Usage
 
 ```bash
-layerbase login                    # store an API key (saved 0600, never echoed)
+layerbase                          # interactive menu (login / spindb / ...)
+lbase                              # shorter alias - both are installed
+
+layerbase login                    # browser sign-in; saves a token to ~/.layerbase-cli
+layerbase whoami                   # show the signed-in account (--json to script)
 layerbase ls                       # list your cloud databases
 layerbase ls --json                # same, as JSON for scripting
 
@@ -32,10 +36,23 @@ layerbase mysql <db>               # MySQL / MariaDB
 layerbase connect <db> --print     # show connection info, do not exec
 layerbase connection-string <db>   # print the full connstr (reveals password)
 
-layerbase logout                   # remove the stored API key
+layerbase spindb [args...]         # run the local spindb CLI (passes args through)
+layerbase logout                   # remove the stored credentials
 ```
 
 `<db>` accepts a cloud database id or its name.
+
+## Interactive menu and the spindb bridge
+
+Run `layerbase` with no command (on a terminal) for an arrow-key menu:
+log in / out, list cloud databases, or drop into local
+[spindb](https://github.com/robertjbass/spindb). The menu is just sugar over
+the commands above, so everything is still scriptable.
+
+layerbase is the bridge between local spindb and your Layerbase cloud account:
+`layerbase spindb ...` runs the local engine manager (no login needed), while
+the cloud commands work against your account once you `login`. spindb is found
+on your PATH, or run via `npx`/`pnpx`/`bunx` if it is not installed.
 
 ## Why no connection string
 
@@ -52,18 +69,36 @@ file that is deleted on exit. The password is never an argv value.
 | Redis / Valkey | `REDISCLI_AUTH` env var |
 | Others | `layerbase connection-string` / `--print` fallback for now |
 
+## Login
+
+`layerbase login` opens your browser to `layerbase.com/auth/cli`, you
+authenticate with GitHub or Google, and a 30-day token is returned to a
+loopback server the CLI runs on `127.0.0.1` (a random port). A `state` nonce
+ties the response to your `login` process, and the web app only ever redirects
+the token to a loopback address. Mirrors how layerbase-desktop signs in (it uses
+a `layerbase://` deep link; a CLI uses the loopback instead).
+
+The token is stored at **`~/.layerbase-cli/credentials.json`** (mode `0600`).
+Cloud calls go through the web app's `/api/cli/*` routes with
+`Authorization: Bearer <token>`, exactly like the desktop app, so the cloud API
+URL stays internal.
+
 ## Security model
 
-- Connection info is fetched over TLS, authenticated by your stored API key.
-- The API key lives at `~/.config/layerbase/credentials.json`, mode `0600`.
+- Connection info is fetched over TLS, authenticated by your stored token.
+- The token lives at `~/.layerbase-cli/credentials.json`, mode `0600`.
 - Secrets are passed to the child client via env or a `0600` temp file, never on
   argv, and the temp file is removed when the client exits.
 
 ## Status
 
-This is the first standalone cut of the `layerbase` CLI (it replaces the old
-`0.0.3` shim that proxied to `spindb`). The design it implements is in
+This is an early cut of the `layerbase` CLI (it replaces the old `0.0.3` shim
+that proxied to `spindb`). The design it implements is in
 `layerbase-cloud/plans/active/layerbase-cli-secure-connect.md`.
+
+The web side (`/auth/cli` + `/api/cli/*`) is implemented in the layerbase repo
+and must be deployed for login and cloud calls to work. Set `LAYERBASE_API_URL`
+to point at a dev/preview deployment while testing.
 
 The cloud `/api/cli/*` endpoints the CLI calls (`whoami`, `databases`,
 `databases/:id/connection-info`) still need to be exposed on the

@@ -1,10 +1,10 @@
 import { loadCredentials } from './config'
 
-// TODO(cloud): these /api/cli/* endpoints are the proposed CLI surface from
-// plans/active/layerbase-cli-secure-connect.md and do not exist yet. They must
-// be added on the layerbase-cloud / web side (reusing the dashboard's existing
-// connection-info path and the API-key auth in src/api/api-keys.ts) before the
-// connect commands work end to end.
+// These /api/cli/* endpoints and the /auth/cli login pages are implemented in
+// the layerbase web app (app/(frontend)/api/cli/* and app/(frontend)/auth/cli/*).
+// They must be deployed for `login` and the cloud calls below to work; the CLI
+// authenticates with the 30-day JWT and the web app proxies to the cloud API,
+// exactly like layerbase-desktop.
 export const DEFAULT_API_URL =
   process.env.LAYERBASE_API_URL ?? 'https://layerbase.com'
 
@@ -28,6 +28,18 @@ export type ConnectionInfo = {
   tls?: boolean
 }
 
+export type WhoamiResponse = {
+  user: {
+    id: string
+    email: string
+    name: string | null
+    avatarUrl: string | null
+    role: 'admin' | 'user' | null
+  }
+  hasActivePlan: boolean
+  cloudApiKey: string | null
+}
+
 async function authedFetch(
   path: string,
   init?: RequestInit,
@@ -40,41 +52,38 @@ async function authedFetch(
   const response = await fetch(new URL(path, credentials.apiUrl), {
     ...init,
     headers: {
-      authorization: `Bearer ${credentials.apiKey}`,
+      authorization: `Bearer ${credentials.token}`,
       'content-type': 'application/json',
       ...init?.headers,
     },
   })
 
+  if (response.status === 401) {
+    throw new Error(
+      'Your session has expired. Run `layerbase login` to sign in again.',
+    )
+  }
+
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(
       `Cloud API ${response.status}: ${body || response.statusText}. ` +
-        'Check that you are logged in (`layerbase login`) and that the ' +
-        'database id or name is correct (`layerbase ls`).',
+        'Check the database id or name (`layerbase ls`).',
     )
   }
 
   return response
 }
 
-export async function verifyApiKey(options: {
-  apiUrl: string
-  apiKey: string
-}): Promise<boolean> {
-  try {
-    const response = await fetch(new URL('/api/cli/whoami', options.apiUrl), {
-      headers: { authorization: `Bearer ${options.apiKey}` },
-    })
-    return response.ok
-  } catch {
-    return false
-  }
+export async function whoami(): Promise<WhoamiResponse> {
+  const response = await authedFetch('/api/cli/whoami')
+  return (await response.json()) as WhoamiResponse
 }
 
 export async function listDatabases(): Promise<CloudDatabase[]> {
   const response = await authedFetch('/api/cli/databases')
-  return (await response.json()) as CloudDatabase[]
+  const data = (await response.json()) as { databases: CloudDatabase[] }
+  return data.databases
 }
 
 export async function getConnectionInfo(
