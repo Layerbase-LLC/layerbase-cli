@@ -1,0 +1,63 @@
+{
+  "name": "layerbase",
+  "version": "0.1.0",
+  "description": "Layerbase cloud CLI: connect to your managed databases without leaking the connection string into shell history.",
+  "type": "module",
+  "bin": {
+    "layerbase": "./bin/layerbase.mjs"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.tsx",
+    "start": "node bin/layerbase.mjs",
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "check:types": "tsc --noEmit",
+    "check": "tsc --noEmit && eslint ."
+  },
+  "dependencies": {
+    "ink": "^7.1.0",
+    "ink-spinner": "^5.0.0",
+    "meow": "^14.1.0",
+    "react": "^19.2.0",
+    "tsx": "^4.22.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.0",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  },
+  "keywords": [
+    "layerbase",
+    "database",
+    "cli",
+    "postgres",
+    "mysql",
+    "mariadb",
+    "redis",
+    "valkey",
+    "cloud"
+  ],
+  "author": "Bob Bass",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Layerbase-LLC/layerbase-cli.git"
+  },
+  "homepage": "https://layerbase.com",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "packageManager": "pnpm@10.23.0"
+}
