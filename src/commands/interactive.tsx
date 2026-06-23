@@ -1,79 +1,58 @@
 import { render, Box, Text } from 'ink'
+import { Prompt } from '@/ui/prompt'
 import { Menu } from '@/ui/menu'
 import type { MenuItem } from '@/ui/menu'
-import { Header } from '@/ui/brand'
 import { Connecting } from '@/ui/connecting'
-import { PressEnter } from '@/ui/press-enter'
 import { loadCredentials } from '@/lib/config'
 import type { StoredCredentials } from '@/lib/config'
 import { decodeTokenClaims } from '@/lib/token'
+import { resolveInput, availableCommands } from '@/lib/commands'
 import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
 import { runSpindb } from '@/lib/run-spindb'
 import { connectToDatabase } from '@/commands/connect'
-import { lbStatus } from '@/lib/alias'
 import { App } from '@/ui/app'
 import type { CommandFlags } from '@/ui/app'
 
+const ACCENT_ANSI = '\x1b[38;2;124;156;255m'
+const DIM = '\x1b[2m'
+const RESET = '\x1b[0m'
 const BACK = '__back__'
 
-function clearScreen(): void {
-  // Clear the visible screen and home the cursor (scrollback is preserved).
-  process.stdout.write('[2J[H')
-}
-
-function accountLine(creds: StoredCredentials | null): {
-  text: string
-  loggedIn: boolean
-} {
-  if (!creds) return { text: 'Not signed in', loggedIn: false }
+function accountText(creds: StoredCredentials | null): string {
+  if (!creds) return 'Not signed in'
   const email = decodeTokenClaims(creds.token)?.email
-  return { text: email ? `Signed in as ${email}` : 'Signed in', loggedIn: true }
+  return email ? `Signed in as ${email}` : 'Signed in'
 }
 
-function buildItems(loggedIn: boolean, lbAvailable: boolean): MenuItem[] {
-  const items: MenuItem[] = []
-  if (loggedIn) {
-    items.push({ label: 'List cloud databases', value: 'ls' })
-    items.push({ label: 'Connect to a database', value: 'connect' })
-  } else {
-    items.push({ label: 'Log in', value: 'login', hint: 'browser sign-in' })
-  }
-  items.push({ label: 'Run spindb', value: 'spindb', hint: 'local databases' })
-  if (loggedIn) items.push({ label: 'Log out', value: 'logout' })
-  if (lbAvailable) {
-    items.push({ label: 'Enable the lb shortcut', value: 'alias' })
-  }
-  items.push({ label: 'Quit', value: 'quit' })
-  return items
+function printBanner(creds: StoredCredentials | null): void {
+  process.stdout.write(
+    `\n${ACCENT_ANSI}◆ Layerbase${RESET} ${DIM}cloud + local databases${RESET}\n` +
+      `${DIM}${accountText(creds)} · type /help to see commands${RESET}\n\n`,
+  )
 }
 
-function pick(creds: StoredCredentials | null): Promise<string> {
-  const loggedIn = Boolean(creds)
-  const lbAvailable = lbStatus().state === 'available'
-  const items = buildItems(loggedIn, lbAvailable)
-  const account = accountLine(creds)
+function printCommands(loggedIn: boolean): void {
+  const lines = availableCommands(loggedIn).map(
+    (c) => `  ${DIM}/${RESET}${c.name.padEnd(11)}${DIM}${c.summary}${RESET}`,
+  )
+  process.stdout.write(`Commands:\n${lines.join('\n')}\n\n`)
+}
 
+function promptOnce(creds: StoredCredentials | null): Promise<string> {
+  const commands = availableCommands(Boolean(creds)).map((c) => ({
+    name: c.name,
+    summary: c.summary,
+  }))
   return new Promise<string>((resolve) => {
     const app = render(
-      <Box flexDirection="column" paddingX={1} paddingY={1}>
-        <Header subtitle="cloud + local databases" />
-        <Box marginBottom={1}>
-          <Text
-            color={account.loggedIn ? 'green' : undefined}
-            dimColor={!account.loggedIn}
-          >
-            {account.text}
-          </Text>
-        </Box>
-        <Menu
-          items={items}
-          onSelect={(value) => {
-            app.unmount()
-            resolve(value)
-          }}
-        />
-      </Box>,
+      <Prompt
+        commands={commands}
+        onSubmit={(raw) => {
+          app.unmount()
+          resolve(raw)
+        }}
+      />,
     )
   })
 }
@@ -85,17 +64,16 @@ function pickDatabase(databases: CloudDatabase[]): Promise<string | null> {
     hint: `${db.engine} · ${db.status}`,
   }))
   items.push({ label: 'Back', value: BACK })
-
   return new Promise<string | null>((resolve) => {
     const app = render(
-      <Box flexDirection="column" paddingX={1} paddingY={1}>
+      <Box flexDirection="column" paddingY={1}>
         <Text bold>Pick a database to connect to</Text>
         <Box marginTop={1}>
           <Menu
             items={items}
-            onSelect={(value) => {
+            onSelect={(v) => {
               app.unmount()
-              resolve(value === BACK ? null : value)
+              resolve(v === BACK ? null : v)
             }}
           />
         </Box>
@@ -104,9 +82,11 @@ function pickDatabase(databases: CloudDatabase[]): Promise<string | null> {
   })
 }
 
-// Menu action: list the user's databases, let them pick one, and connect with
-// the right client. Returns to the hub when the client exits (or on Back/error).
-async function runConnectFlow(): Promise<void> {
+async function runConnectFlow(dbRef: string | undefined): Promise<void> {
+  if (dbRef) {
+    await connectToDatabase({ dbRef, command: 'connect' })
+    return
+  }
   const spinner = render(<Connecting label="Loading your databases..." />)
   let databases: CloudDatabase[]
   try {
@@ -117,52 +97,107 @@ async function runConnectFlow(): Promise<void> {
     return
   }
   spinner.unmount()
-
   if (databases.length === 0) {
     process.stdout.write(
       'No databases yet. Create one at https://layerbase.com.\n',
     )
     return
   }
-
-  const dbRef = await pickDatabase(databases)
-  if (!dbRef) return
-
-  await connectToDatabase({ dbRef, command: 'connect' })
+  const picked = await pickDatabase(databases)
+  if (picked) await connectToDatabase({ dbRef: picked, command: 'connect' })
 }
 
-async function waitForEnter(): Promise<void> {
-  const instance = render(<PressEnter />)
-  await instance.waitUntilExit()
+async function runMenu(
+  creds: StoredCredentials | null,
+  flags: CommandFlags,
+): Promise<'quit' | 'continue'> {
+  // The selectable view: action commands only (menu/help/quit are not actions
+  // here - q in the list returns to the prompt).
+  const items: MenuItem[] = availableCommands(Boolean(creds))
+    .filter((c) => !['menu', 'help', 'quit'].includes(c.name))
+    .map((c) => ({ label: `/${c.name}`, value: c.name, hint: c.summary }))
+
+  const choice = await new Promise<string>((resolve) => {
+    const app = render(
+      <Box flexDirection="column" paddingY={1}>
+        <Text dimColor>Select a command (q to go back to the prompt)</Text>
+        <Box marginTop={1}>
+          <Menu
+            items={items}
+            onSelect={(v) => {
+              app.unmount()
+              resolve(v)
+            }}
+          />
+        </Box>
+      </Box>,
+    )
+  })
+
+  if (choice === 'quit') return 'continue' // q in the menu = back to the prompt
+  return dispatch(choice, [], creds, flags)
 }
 
-// The no-command experience: a small hub. Each action runs on a clean screen,
-// then waits for Enter and returns to the menu, so you can sign in, then list,
-// then connect, ... Cloud actions depend on auth; spindb is always offered.
+async function dispatch(
+  name: string,
+  args: string[],
+  creds: StoredCredentials | null,
+  flags: CommandFlags,
+): Promise<'quit' | 'continue'> {
+  switch (name) {
+    case 'quit':
+      return 'quit'
+    case 'help':
+      printCommands(Boolean(creds))
+      return 'continue'
+    case 'menu':
+      return runMenu(creds, flags)
+    case 'spindb':
+      await runSpindb(args)
+      return 'continue'
+    case 'connect':
+      await runConnectFlow(args[0])
+      return 'continue'
+    default: {
+      const instance = render(<App command={name} args={args} flags={flags} />)
+      await instance.waitUntilExit()
+      process.stdout.write('\n')
+      return 'continue'
+    }
+  }
+}
+
+// The interactive harness: a Claude-Code-style prompt loop. Type /commands (or
+// browse the palette), /menu for the selectable view, /spindb to hand off to
+// local spindb. Bare text is the future AI-chat path (stubbed for now). The
+// command set lives in @/lib/commands.
 export async function runInteractive(flags: CommandFlags): Promise<void> {
-  for (;;) {
-    clearScreen()
-    const creds = await loadCredentials()
-    const choice = await pick(creds)
+  printBanner(await loadCredentials())
 
-    if (choice === 'quit') {
-      clearScreen()
-      process.exitCode = 0
+  for (;;) {
+    const creds = await loadCredentials()
+    const raw = await promptOnce(creds)
+    const res = resolveInput(raw, { loggedIn: Boolean(creds) })
+
+    if (res.type === 'empty') continue
+    if (res.type === 'unknown') {
+      process.stdout.write(
+        `Unknown command: /${res.token}. Type /help to see the commands.\n\n`,
+      )
+      continue
+    }
+    if (res.type === 'ai') {
+      process.stdout.write(
+        'We do not yet support AI chat, please check back soon.\n\n',
+      )
+      printCommands(Boolean(creds))
+      continue
+    }
+
+    const result = await dispatch(res.name, res.args, creds, flags)
+    if (result === 'quit') {
+      process.stdout.write('Bye.\n')
       return
     }
-
-    clearScreen()
-    if (choice === 'spindb') {
-      await runSpindb([])
-    } else if (choice === 'connect') {
-      await runConnectFlow()
-    } else {
-      // login / logout / ls / alias run through the same Ink dispatcher as
-      // typed commands; wait for the action to finish.
-      const instance = render(<App command={choice} args={[]} flags={flags} />)
-      await instance.waitUntilExit()
-    }
-
-    await waitForEnter()
   }
 }

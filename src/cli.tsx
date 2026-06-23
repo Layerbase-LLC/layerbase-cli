@@ -23,7 +23,7 @@ const cli = meow(
     spindb [args...]          Run the local spindb CLI (passes args through)
     alias                     Set up the short lb command (only if it is free)
 
-  Run with no command for an interactive menu. Also installed as lbase.
+  Run with no command for the interactive prompt (type /commands). Also lbase.
 
   Options
     --print                   With connect: show connection info, do not exec
