@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Text, useApp } from 'ink'
-import { clearCredentials } from '../lib/config'
+import { clearCredentials } from '@/lib/config'
 
 export function Logout() {
   const { exit } = useApp()

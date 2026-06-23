@@ -1,10 +1,10 @@
-import { Login } from '../commands/login'
-import { Logout } from '../commands/logout'
-import { List } from '../commands/ls'
-import { Whoami } from '../commands/whoami'
-import { Alias } from '../commands/alias'
-import { ConnectionString } from '../commands/connection-string'
-import { Unknown } from './unknown'
+import { Login } from '@/commands/login'
+import { Logout } from '@/commands/logout'
+import { List } from '@/commands/ls'
+import { Whoami } from '@/commands/whoami'
+import { Alias } from '@/commands/alias'
+import { ConnectionString } from '@/commands/connection-string'
+import { Unknown } from '@/ui/unknown'
 
 export type CommandFlags = {
   print?: boolean

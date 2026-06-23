@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
-import { openBrowser } from './open-browser'
+import { openBrowser } from '@/lib/open-browser'
 
 export type LoginPhase =
   | { kind: 'starting' }

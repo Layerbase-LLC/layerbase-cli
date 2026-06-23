@@ -1,4 +1,4 @@
-import type { ConnectionInfo } from './cloud-api'
+import type { ConnectionInfo } from '@/lib/cloud-api'
 
 // Engine values mirror the canonical `Engine` map shared across the Layerbase
 // ecosystem (web `lib/databases.ts`, cloud `src/config/engines.ts`). Kept as a

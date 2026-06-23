@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Text, useApp } from 'ink'
-import { loadCredentials } from '../lib/config'
-import { decodeTokenClaims } from '../lib/token'
+import { loadCredentials } from '@/lib/config'
+import { decodeTokenClaims } from '@/lib/token'
 
 type State =
   | { kind: 'loading' }

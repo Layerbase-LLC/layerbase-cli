@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, useApp } from 'ink'
 import Spinner from 'ink-spinner'
-import { listDatabases } from '../lib/cloud-api'
-import type { CloudDatabase } from '../lib/cloud-api'
+import { listDatabases } from '@/lib/cloud-api'
+import type { CloudDatabase } from '@/lib/cloud-api'
 
 type State =
   | { kind: 'loading' }

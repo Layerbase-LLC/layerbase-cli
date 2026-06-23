@@ -1,10 +1,10 @@
 import { render } from 'ink'
-import { Connecting } from '../ui/connecting'
-import { getConnectionInfo } from '../lib/cloud-api'
-import { buildLaunchPlan } from '../lib/engines'
-import { runClient } from '../lib/launch'
-import { printConnectionInfo } from '../lib/format'
-import type { CommandFlags } from '../ui/app'
+import { Connecting } from '@/ui/connecting'
+import { getConnectionInfo } from '@/lib/cloud-api'
+import { buildLaunchPlan } from '@/lib/engines'
+import { runClient } from '@/lib/launch'
+import { printConnectionInfo } from '@/lib/format'
+import type { CommandFlags } from '@/ui/app'
 
 type ExecOptions = {
   command: string
