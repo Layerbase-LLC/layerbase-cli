@@ -21,6 +21,7 @@ const cli = meow(
     mysql <db>                Connect to a MySQL/MariaDB database
     connection-string <db>    Print the connection string (reveals the password)
     spindb [args...]          Run the local spindb CLI (passes args through)
+    alias                     Set up the short lb command (only if it is free)
 
   Run with no command for an interactive menu. Also installed as lbase.
 
