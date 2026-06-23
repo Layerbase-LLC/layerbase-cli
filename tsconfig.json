@@ -11,7 +11,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "types": ["node", "react"]
+    "types": ["node", "react"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src", "bin"]
+  "include": ["src"]
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { ACCENT } from './brand'
+import { ACCENT } from '@/ui/brand'
 
 export type MenuItem = { label: string; value: string; hint?: string }
 

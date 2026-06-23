@@ -1,4 +1,4 @@
-import type { ConnectionInfo } from './cloud-api'
+import type { ConnectionInfo } from '@/lib/cloud-api'
 
 const SCHEME_BY_ENGINE: Record<string, string> = {
   postgresql: 'postgresql',

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Text, useApp } from 'ink'
-import { getConnectionInfo } from '../lib/cloud-api'
-import { buildConnectionString } from '../lib/format'
+import { getConnectionInfo } from '@/lib/cloud-api'
+import { buildConnectionString } from '@/lib/format'
 
 type State =
   | { kind: 'loading' }

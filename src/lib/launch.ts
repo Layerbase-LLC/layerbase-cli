@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { LaunchPlan } from './engines'
+import type { LaunchPlan } from '@/lib/engines'
 
 // Spawns the engine's native client with credentials passed via env or a
 // transient 0600 file, never on argv, then cleans the credential up on exit.

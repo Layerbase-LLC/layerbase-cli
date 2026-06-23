@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Text, useApp } from 'ink'
-import { setupLb } from '../lib/alias'
+import { setupLb } from '@/lib/alias'
 
 type Result = { ok: boolean; text: string }
 

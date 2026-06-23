@@ -1,9 +1,9 @@
 import meow from 'meow'
 import { render } from 'ink'
-import { App } from './ui/app'
-import { runExec } from './commands/connect'
-import { runInteractive } from './commands/interactive'
-import { runSpindb } from './lib/run-spindb'
+import { App } from '@/ui/app'
+import { runExec } from '@/commands/connect'
+import { runInteractive } from '@/commands/interactive'
+import { runSpindb } from '@/lib/run-spindb'
 
 const cli = meow(
   `

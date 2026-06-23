@@ -1,4 +1,4 @@
-import { loadCredentials } from './config'
+import { loadCredentials } from '@/lib/config'
 
 // These /api/cli/* endpoints and the /auth/cli login pages are implemented in
 // the layerbase web app (app/(frontend)/api/cli/* and app/(frontend)/auth/cli/*).

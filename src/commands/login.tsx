@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Box, Text, useApp } from 'ink'
 import Spinner from 'ink-spinner'
-import { runBrowserLogin } from '../lib/browser-login'
-import { DEFAULT_API_URL, whoami } from '../lib/cloud-api'
-import { saveCredentials, credentialsPath } from '../lib/config'
-import type { CommandFlags } from '../ui/app'
+import { runBrowserLogin } from '@/lib/browser-login'
+import { DEFAULT_API_URL, whoami } from '@/lib/cloud-api'
+import { saveCredentials, credentialsPath } from '@/lib/config'
+import type { CommandFlags } from '@/ui/app'
 
 type Phase =
   | { kind: 'starting' }
