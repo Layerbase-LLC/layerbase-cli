@@ -1,11 +1,11 @@
 {
   "name": "layerbase",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Layerbase cloud CLI: connect to your managed databases without leaking the connection string into shell history.",
   "type": "module",
   "bin": {
-    "layerbase": "./bin/layerbase.mjs",
-    "lbase": "./bin/layerbase.mjs"
+    "layerbase": "bin/layerbase.mjs",
+    "lbase": "bin/layerbase.mjs"
   },
   "files": [
     "bin",
