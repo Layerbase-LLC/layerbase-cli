@@ -71,7 +71,9 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+        # No registry-url: it makes setup-node write an .npmrc _authToken line
+        # that hijacks the publish onto the legacy token path (revoked Dec 2025)
+        # instead of OIDC trusted publishing, which surfaces as a misleading E404.
 
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
