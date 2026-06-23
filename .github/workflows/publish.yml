@@ -71,15 +71,21 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-        # No registry-url: it makes setup-node write an .npmrc _authToken line
-        # that hijacks the publish onto the legacy token path (revoked Dec 2025)
-        # instead of OIDC trusted publishing, which surfaces as a misleading E404.
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # TEMP DIAGNOSTIC: print the OIDC claims GitHub sends so we can compare
+      # them exactly against the npm trusted-publisher record. Remove once the
+      # publish works. Prints only non-secret claims, never the raw token.
+      - name: Show OIDC claims (debug)
+        run: |
+          RESP=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
+          echo "$RESP" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const t=JSON.parse(s).value;const p=JSON.parse(Buffer.from(t.split('.')[1],'base64url'));console.log(JSON.stringify({repository:p.repository,repository_owner:p.repository_owner,job_workflow_ref:p.job_workflow_ref,ref:p.ref,sub:p.sub},null,2))}catch(e){console.log('decode failed:',e.message)}})"
 
       - name: Publish to npm with OIDC
         id: publish
