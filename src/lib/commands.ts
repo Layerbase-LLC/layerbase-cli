@@ -35,8 +35,11 @@ export const COMMANDS: CommandSpec[] = [
     summary: 'Connect to a cloud database',
     requiresAuth: true,
   },
-  { name: 'spindb', summary: 'Run the local spindb CLI' },
-  { name: 'menu', summary: 'Open the selectable menu' },
+  {
+    name: 'spindb',
+    summary: 'Open the local spindb manager (also /menu)',
+    aliases: ['menu'],
+  },
   { name: 'help', summary: 'List the available commands' },
   { name: 'quit', summary: 'Exit', aliases: ['exit'] },
 ]

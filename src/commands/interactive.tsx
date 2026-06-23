@@ -40,10 +40,12 @@ function printCommands(loggedIn: boolean): void {
 }
 
 function promptOnce(creds: StoredCredentials | null): Promise<string> {
-  const commands = availableCommands(Boolean(creds)).map((c) => ({
-    name: c.name,
-    summary: c.summary,
-  }))
+  // Surface aliases (e.g. /menu for spindb) as their own palette entries so
+  // they are discoverable while typing.
+  const commands = availableCommands(Boolean(creds)).flatMap((c) => [
+    { name: c.name, summary: c.summary },
+    ...(c.aliases ?? []).map((alias) => ({ name: alias, summary: c.summary })),
+  ])
   return new Promise<string>((resolve) => {
     const app = render(
       <Prompt
@@ -107,37 +109,6 @@ async function runConnectFlow(dbRef: string | undefined): Promise<void> {
   if (picked) await connectToDatabase({ dbRef: picked, command: 'connect' })
 }
 
-async function runMenu(
-  creds: StoredCredentials | null,
-  flags: CommandFlags,
-): Promise<'quit' | 'continue'> {
-  // The selectable view: action commands only (menu/help/quit are not actions
-  // here - q in the list returns to the prompt).
-  const items: MenuItem[] = availableCommands(Boolean(creds))
-    .filter((c) => !['menu', 'help', 'quit'].includes(c.name))
-    .map((c) => ({ label: `/${c.name}`, value: c.name, hint: c.summary }))
-
-  const choice = await new Promise<string>((resolve) => {
-    const app = render(
-      <Box flexDirection="column" paddingY={1}>
-        <Text dimColor>Select a command (q to go back to the prompt)</Text>
-        <Box marginTop={1}>
-          <Menu
-            items={items}
-            onSelect={(v) => {
-              app.unmount()
-              resolve(v)
-            }}
-          />
-        </Box>
-      </Box>,
-    )
-  })
-
-  if (choice === 'quit') return 'continue' // q in the menu = back to the prompt
-  return dispatch(choice, [], creds, flags)
-}
-
 async function dispatch(
   name: string,
   args: string[],
@@ -150,8 +121,6 @@ async function dispatch(
     case 'help':
       printCommands(Boolean(creds))
       return 'continue'
-    case 'menu':
-      return runMenu(creds, flags)
     case 'spindb':
       await runSpindb(args)
       return 'continue'
@@ -168,9 +137,9 @@ async function dispatch(
 }
 
 // The interactive harness: a Claude-Code-style prompt loop. Type /commands (or
-// browse the palette), /menu for the selectable view, /spindb to hand off to
-// local spindb. Bare text is the future AI-chat path (stubbed for now). The
-// command set lives in @/lib/commands.
+// browse the palette); /spindb (alias /menu) hands off to local spindb. Bare
+// text is the future AI-chat path (stubbed for now). The command set lives in
+// @/lib/commands.
 export async function runInteractive(flags: CommandFlags): Promise<void> {
   printBanner(await loadCredentials())
 
