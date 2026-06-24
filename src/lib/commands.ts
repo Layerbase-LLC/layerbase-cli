@@ -3,9 +3,10 @@
 // /help automatically. This is the seam future AI chat plugs into (a default
 // handler for non-command input).
 
-// When true (the pre-AI state), a bare single word that matches a command runs
-// it, so `login` behaves like `/login`. Once AI chat is wired in, flip this to
-// false so bare text is sent to the model instead of being treated as a command.
+// When true (the pre-AI state), bare input whose FIRST word matches a command
+// runs it (with the rest as args), so `login` behaves like `/login` and
+// `spindb start db` forwards to spindb like `/spindb start db`. Once AI chat is
+// wired in, flip this to false so bare text is sent to the model instead.
 // Deliberately an in-code constant, not an env var: it encodes a code-evolution
 // stage, not a runtime/operator decision.
 export const ALLOW_FORWARD_SLASH_OMISSION = true
@@ -42,7 +43,7 @@ export const COMMANDS: CommandSpec[] = [
   },
   {
     name: 'spindb',
-    summary: 'Open the local spindb manager (also /menu)',
+    summary: 'Open the local spindb manager',
     aliases: ['menu'],
   },
   { name: 'help', summary: 'List the available commands' },
@@ -69,9 +70,9 @@ export type Resolution =
   | { type: 'empty' }
 
 // Parse a line of prompt input into an action. Slash commands always resolve as
-// commands; bare input resolves to a command only when it is a single word that
-// matches AND ALLOW_FORWARD_SLASH_OMISSION is on; everything else is 'ai' (the
-// future AI-chat path, stubbed for now).
+// commands; bare input resolves to a command when its first word matches AND
+// ALLOW_FORWARD_SLASH_OMISSION is on; everything else is 'ai' (the future
+// AI-chat path, stubbed for now).
 export function resolveInput(
   raw: string,
   options: { loggedIn: boolean },
@@ -92,10 +93,10 @@ export function resolveInput(
 
   if (ALLOW_FORWARD_SLASH_OMISSION) {
     const words = input.split(/\s+/)
-    const only = words[0]
-    if (words.length === 1 && only) {
-      const cmd = findCommand(only)
-      if (cmd) return { type: 'command', name: cmd.name, args: [] }
+    const first = words[0]
+    if (first) {
+      const cmd = findCommand(first)
+      if (cmd) return { type: 'command', name: cmd.name, args: words.slice(1) }
     }
   }
 

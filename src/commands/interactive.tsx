@@ -46,7 +46,10 @@ async function promptOnce(creds: StoredCredentials | null): Promise<string> {
   // they are discoverable while typing.
   const commands = availableCommands(Boolean(creds)).flatMap((c) => [
     { name: c.name, summary: c.summary },
-    ...(c.aliases ?? []).map((alias) => ({ name: alias, summary: c.summary })),
+    ...(c.aliases ?? []).map((alias) => ({
+      name: alias,
+      summary: `Alias for /${c.name}`,
+    })),
   ])
   // Ctrl+C at the prompt cancels (null), which we treat as /quit.
   const raw = await runView<string>((resolve) => (
