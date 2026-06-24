@@ -41,14 +41,11 @@ export async function runClone(options: {
 
   let justCreated = false
   if (!(await spindbExists(localName))) {
-    process.stdout.write(`Creating local container "${localName}"...\n`)
-    const createArgs = [
-      'create',
-      localName,
-      '--engine',
-      info.engine,
-      '--no-start',
-    ]
+    process.stdout.write(
+      `Creating and starting local container "${localName}"...\n`,
+    )
+    // --start: spindb pull requires the target container to be running.
+    const createArgs = ['create', localName, '--engine', info.engine, '--start']
     if (info.version) createArgs.push('--db-version', info.version)
     const code = await runSpindb(createArgs)
     if (code !== 0) {
@@ -56,6 +53,10 @@ export async function runClone(options: {
       return code
     }
     justCreated = true
+  } else {
+    // Ensure the existing container is running before pulling (no-op if it is).
+    process.stdout.write(`Starting "${localName}"...\n`)
+    await runSpindb(['start', localName])
   }
 
   process.stdout.write('Pulling data with spindb...\n')

@@ -1,6 +1,6 @@
 {
   "name": "layerbase",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Layerbase cloud CLI: connect to your managed databases without leaking the connection string into shell history.",
   "type": "module",
   "bin": {
