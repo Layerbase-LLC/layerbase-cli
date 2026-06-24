@@ -3,6 +3,7 @@ import { render } from 'ink'
 import { App } from '@/ui/app'
 import { runExec } from '@/commands/connect'
 import { runInteractive } from '@/commands/interactive'
+import { runClone } from '@/commands/clone'
 import { runSpindb } from '@/lib/run-spindb'
 
 const cli = meow(
@@ -16,6 +17,7 @@ const cli = meow(
     whoami                    Show the signed-in account (--json to script it)
     ls                        List your cloud databases
     connect <db>              Connect with the right client for the engine
+    clone <db> [name]         Clone a cloud database into a local spindb container
     psql <db>                 Connect to a Postgres-family database
     redis-cli <db>            Connect to a Redis/Valkey database
     mysql <db>                Connect to a MySQL/MariaDB database
@@ -62,6 +64,13 @@ if (command === 'help') {
   }
 } else if (command === 'spindb') {
   process.exit(await runSpindb(rest))
+} else if (command === 'clone') {
+  const dbRef = rest[0]
+  if (!dbRef) {
+    process.stderr.write('Usage: layerbase clone <db> [local-name]\n')
+    process.exit(1)
+  }
+  process.exit(await runClone({ dbRef, localName: rest[1] }))
 } else if (EXEC_COMMANDS.has(command)) {
   await runExec({ command, args: rest, flags: cli.flags })
 } else {

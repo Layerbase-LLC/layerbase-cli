@@ -11,6 +11,7 @@ import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
 import { runSpindb } from '@/lib/run-spindb'
 import { connectToDatabase } from '@/commands/connect'
+import { runClone } from '@/commands/clone'
 import { App } from '@/ui/app'
 import type { CommandFlags } from '@/ui/app'
 
@@ -84,11 +85,9 @@ function pickDatabase(databases: CloudDatabase[]): Promise<string | null> {
   })
 }
 
-async function runConnectFlow(dbRef: string | undefined): Promise<void> {
-  if (dbRef) {
-    await connectToDatabase({ dbRef, command: 'connect' })
-    return
-  }
+// List the user's databases and let them pick one (used when /connect or /clone
+// is run without a db argument). Returns null on error / empty / cancel.
+async function selectDatabase(): Promise<string | null> {
   const spinner = render(<Connecting label="Loading your databases..." />)
   let databases: CloudDatabase[]
   try {
@@ -96,17 +95,29 @@ async function runConnectFlow(dbRef: string | undefined): Promise<void> {
   } catch (error) {
     spinner.unmount()
     process.stderr.write(`${(error as Error).message}\n`)
-    return
+    return null
   }
   spinner.unmount()
   if (databases.length === 0) {
     process.stdout.write(
       'No databases yet. Create one at https://layerbase.com.\n',
     )
-    return
+    return null
   }
-  const picked = await pickDatabase(databases)
-  if (picked) await connectToDatabase({ dbRef: picked, command: 'connect' })
+  return pickDatabase(databases)
+}
+
+async function runConnectFlow(dbRef: string | undefined): Promise<void> {
+  const target = dbRef ?? (await selectDatabase())
+  if (target) await connectToDatabase({ dbRef: target, command: 'connect' })
+}
+
+async function runCloneFlow(
+  dbRef: string | undefined,
+  localName: string | undefined,
+): Promise<void> {
+  const target = dbRef ?? (await selectDatabase())
+  if (target) await runClone({ dbRef: target, localName })
 }
 
 async function dispatch(
@@ -126,6 +137,9 @@ async function dispatch(
       return 'continue'
     case 'connect':
       await runConnectFlow(args[0])
+      return 'continue'
+    case 'clone':
+      await runCloneFlow(args[0], args[1])
       return 'continue'
     default: {
       const instance = render(<App command={name} args={args} flags={flags} />)

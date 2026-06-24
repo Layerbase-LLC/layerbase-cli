@@ -36,6 +36,11 @@ export const COMMANDS: CommandSpec[] = [
     requiresAuth: true,
   },
   {
+    name: 'clone',
+    summary: 'Clone a cloud database into a local spindb container',
+    requiresAuth: true,
+  },
+  {
     name: 'spindb',
     summary: 'Open the local spindb manager (also /menu)',
     aliases: ['menu'],
