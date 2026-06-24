@@ -3,6 +3,7 @@ import { Prompt } from '@/ui/prompt'
 import { Menu } from '@/ui/menu'
 import type { MenuItem } from '@/ui/menu'
 import { Connecting } from '@/ui/connecting'
+import { runView } from '@/ui/run-view'
 import { loadCredentials } from '@/lib/config'
 import type { StoredCredentials } from '@/lib/config'
 import { decodeTokenClaims } from '@/lib/token'
@@ -40,49 +41,39 @@ function printCommands(loggedIn: boolean): void {
   process.stdout.write(`Commands:\n${lines.join('\n')}\n\n`)
 }
 
-function promptOnce(creds: StoredCredentials | null): Promise<string> {
+async function promptOnce(creds: StoredCredentials | null): Promise<string> {
   // Surface aliases (e.g. /menu for spindb) as their own palette entries so
   // they are discoverable while typing.
   const commands = availableCommands(Boolean(creds)).flatMap((c) => [
     { name: c.name, summary: c.summary },
     ...(c.aliases ?? []).map((alias) => ({ name: alias, summary: c.summary })),
   ])
-  return new Promise<string>((resolve) => {
-    const app = render(
-      <Prompt
-        commands={commands}
-        onSubmit={(raw) => {
-          app.unmount()
-          resolve(raw)
-        }}
-      />,
-    )
-  })
+  // Ctrl+C at the prompt cancels (null), which we treat as /quit.
+  const raw = await runView<string>((resolve) => (
+    <Prompt commands={commands} onSubmit={resolve} />
+  ))
+  return raw ?? '/quit'
 }
 
-function pickDatabase(databases: CloudDatabase[]): Promise<string | null> {
+async function pickDatabase(
+  databases: CloudDatabase[],
+): Promise<string | null> {
   const items: MenuItem[] = databases.map((db) => ({
     label: db.name,
     value: db.id,
     hint: `${db.engine} · ${db.status}`,
   }))
   items.push({ label: 'Back', value: BACK })
-  return new Promise<string | null>((resolve) => {
-    const app = render(
-      <Box flexDirection="column" paddingY={1}>
-        <Text bold>Pick a database to connect to</Text>
-        <Box marginTop={1}>
-          <Menu
-            items={items}
-            onSelect={(v) => {
-              app.unmount()
-              resolve(v === BACK ? null : v)
-            }}
-          />
-        </Box>
-      </Box>,
-    )
-  })
+  const chosen = await runView<string>((resolve) => (
+    <Box flexDirection="column" paddingY={1}>
+      <Text bold>Pick a database to connect to</Text>
+      <Box marginTop={1}>
+        <Menu items={items} onSelect={resolve} />
+      </Box>
+    </Box>
+  ))
+  // Ctrl+C (null) or Back both mean "cancel".
+  return chosen === null || chosen === BACK ? null : chosen
 }
 
 // List the user's databases and let them pick one (used when /connect or /clone

@@ -41,6 +41,15 @@ type SpawnOptions = {
 function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
   const { command, baseArgs } = spindbInvocation()
   return new Promise<number>((resolve) => {
+    // While spindb owns the foreground, let IT handle Ctrl+C. The parent ignores
+    // SIGINT so it does not get terminated mid-loop (which exits with a confusing
+    // "unsettled top-level await"); when spindb exits we resume the harness.
+    const ignoreSigint = (): void => {}
+    process.on('SIGINT', ignoreSigint)
+    const settle = (code: number): void => {
+      process.removeListener('SIGINT', ignoreSigint)
+      resolve(code)
+    }
     const child = spawn(command, [...baseArgs, ...args], {
       stdio: opts.quiet ? 'ignore' : 'inherit',
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
@@ -55,9 +64,9 @@ function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
             'it is on your PATH.\n',
         )
       }
-      resolve(127)
+      settle(127)
     })
-    child.on('exit', (code) => resolve(code ?? 0))
+    child.on('exit', (code) => settle(code ?? 0))
   })
 }
 
