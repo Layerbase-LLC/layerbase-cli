@@ -24,28 +24,57 @@ function detectPackageRunner(): string {
   return 'npx'
 }
 
-// Hand the terminal to the local spindb CLI, passing through any args. This is
-// the bridge: spindb manages local databases, layerbase adds the cloud account
-// layer around it.
-export async function runSpindb(args: string[] = []): Promise<number> {
-  const onPath = spindbOnPath()
-  const command = onPath ? 'spindb' : detectPackageRunner()
-  const fullArgs = onPath ? args : ['spindb', ...args]
+function spindbInvocation(): { command: string; baseArgs: string[] } {
+  return spindbOnPath()
+    ? { command: 'spindb', baseArgs: [] }
+    : { command: detectPackageRunner(), baseArgs: ['spindb'] }
+}
 
+type SpawnOptions = {
+  // Extra env merged for the child. The clone flow passes the connection string
+  // here (via --from-env) so the password never lands on argv.
+  env?: Record<string, string>
+  // Suppress stdio + the "install spindb" hint (for probes like existence checks).
+  quiet?: boolean
+}
+
+function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
+  const { command, baseArgs } = spindbInvocation()
   return new Promise<number>((resolve) => {
-    const child = spawn(command, fullArgs, {
-      stdio: 'inherit',
+    const child = spawn(command, [...baseArgs, ...args], {
+      stdio: opts.quiet ? 'ignore' : 'inherit',
+      env: opts.env ? { ...process.env, ...opts.env } : process.env,
       // Windows needs a shell to resolve `spindb.cmd` / the package runner.
       shell: process.platform === 'win32',
     })
     child.on('error', (error) => {
-      process.stderr.write(
-        `Failed to run spindb: ${error.message}\n` +
-          'Install spindb (https://github.com/robertjbass/spindb) or make sure ' +
-          'it is on your PATH.\n',
-      )
+      if (!opts.quiet) {
+        process.stderr.write(
+          `Failed to run spindb: ${error.message}\n` +
+            'Install spindb (https://github.com/robertjbass/spindb) or make sure ' +
+            'it is on your PATH.\n',
+        )
+      }
       resolve(127)
     })
     child.on('exit', (code) => resolve(code ?? 0))
   })
+}
+
+// Hand the terminal to the local spindb CLI, passing through any args. This is
+// the bridge: spindb manages local databases, layerbase adds the cloud account
+// layer around it. `opts.env` is merged into the child (used by clone).
+export async function runSpindb(
+  args: string[] = [],
+  opts: { env?: Record<string, string> } = {},
+): Promise<number> {
+  return spawnSpindb(args, { env: opts.env })
+}
+
+// Whether a local spindb container with this name already exists. Uses
+// `spindb info <name> --json`, which exits non-zero when the container is
+// missing.
+export async function spindbExists(name: string): Promise<boolean> {
+  const code = await spawnSpindb(['info', name, '--json'], { quiet: true })
+  return code === 0
 }

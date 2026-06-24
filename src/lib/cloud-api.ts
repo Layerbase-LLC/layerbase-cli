@@ -18,6 +18,10 @@ export type CloudDatabase = {
 
 export type ConnectionInfo = {
   engine: string
+  // Engine version (e.g. '17', '8.0'), used to create a matching local
+  // container when cloning. Optional: present once the cloud connection-info
+  // endpoint exposes it.
+  version?: string
   host: string
   port: number
   database: string
