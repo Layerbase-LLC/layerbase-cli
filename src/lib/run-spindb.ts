@@ -80,6 +80,28 @@ export async function runSpindb(
   return spawnSpindb(args, { env: opts.env })
 }
 
+// Local container lifecycle shortcuts: `layerbase start <name>` /
+// `layerbase stop <name>`. These are thin wrappers over spindb's own
+// start/stop so `layerbase start db` works for LOCAL databases without typing
+// `spindb`. They never touch cloud databases. Any extra flags after the name
+// forward verbatim to spindb (order preserved).
+export async function runLocalLifecycle(
+  action: 'start' | 'stop',
+  args: string[] = [],
+): Promise<number> {
+  const hasName = args.some((arg) => !arg.startsWith('-'))
+  if (!hasName) {
+    const verb = action === 'start' ? 'Start' : 'Stop'
+    process.stderr.write(
+      `Usage: layerbase ${action} <name>\n` +
+        `${verb} a local database container by name (spindb-backed). ` +
+        `This does not affect cloud databases.\n`,
+    )
+    return 1
+  }
+  return runSpindb([action, ...args])
+}
+
 // Whether a local spindb container with this name already exists. Uses
 // `spindb info <name> --json`, which exits non-zero when the container is
 // missing.

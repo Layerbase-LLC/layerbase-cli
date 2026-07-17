@@ -43,9 +43,11 @@ export const COMMANDS: CommandSpec[] = [
   },
   {
     name: 'spindb',
-    summary: 'Open the local spindb manager',
+    summary: 'Open the local spindb manager (forwards all args)',
     aliases: ['menu'],
   },
+  { name: 'start', summary: 'Start a local database container (spindb)' },
+  { name: 'stop', summary: 'Stop a local database container (spindb)' },
   { name: 'help', summary: 'List the available commands' },
   { name: 'quit', summary: 'Exit', aliases: ['exit'] },
 ]

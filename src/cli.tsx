@@ -4,7 +4,29 @@ import { App } from '@/ui/app'
 import { runExec } from '@/commands/connect'
 import { runInteractive } from '@/commands/interactive'
 import { runClone } from '@/commands/clone'
-import { runSpindb } from '@/lib/run-spindb'
+import { runSpindb, runLocalLifecycle } from '@/lib/run-spindb'
+
+// Intercept the spindb passthrough and the local start/stop shortcuts BEFORE
+// meow parses argv. meow keeps only positional tokens in `cli.input` and pulls
+// every flag out into `cli.flags`, so a naive `runSpindb(cli.input)` drops the
+// flags spindb needs (`--json`, `--engine`, `--force`, ...). We read
+// process.argv verbatim instead and forward everything after the command token,
+// flags and order preserved. Doing this before meow is constructed also keeps
+// meow's autoHelp/autoVersion from hijacking `layerbase spindb --help` /
+// `layerbase spindb --version` (which must reach spindb's own CLI).
+const rawArgs = process.argv.slice(2)
+const firstArgIndex = rawArgs.findIndex((arg) => !arg.startsWith('-'))
+const leadingCommand = firstArgIndex >= 0 ? rawArgs[firstArgIndex] : ''
+
+if (leadingCommand === 'spindb') {
+  process.exit(await runSpindb(rawArgs.slice(firstArgIndex + 1)))
+}
+
+if (leadingCommand === 'start' || leadingCommand === 'stop') {
+  process.exit(
+    await runLocalLifecycle(leadingCommand, rawArgs.slice(firstArgIndex + 1)),
+  )
+}
 
 const cli = meow(
   `
@@ -22,7 +44,9 @@ const cli = meow(
     redis-cli <db>            Connect to a Redis/Valkey database
     mysql <db>                Connect to a MySQL/MariaDB database
     connection-string <db>    Print the connection string (reveals the password)
-    spindb [args...]          Run the local spindb CLI (passes args through)
+    start <name>              Start a local database container (spindb-backed)
+    stop <name>               Stop a local database container (spindb-backed)
+    spindb [args...]          Run the local spindb CLI (forwards ALL args, flags included)
     alias                     Set up the short lb command (only if it is free)
 
   Run with no command for the interactive prompt (type /commands). Also lbase.
@@ -37,7 +61,8 @@ const cli = meow(
     $ layerbase login
     $ layerbase ls
     $ layerbase psql my-db
-    $ layerbase spindb create postgres
+    $ layerbase start my-local-db
+    $ layerbase spindb list --json
 `,
   {
     importMeta: import.meta,
@@ -62,8 +87,6 @@ if (command === 'help') {
   } else {
     cli.showHelp(0)
   }
-} else if (command === 'spindb') {
-  process.exit(await runSpindb(rest))
 } else if (command === 'clone') {
   const dbRef = rest[0]
   if (!dbRef) {

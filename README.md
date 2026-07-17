@@ -47,11 +47,17 @@ layerbase psql my-db   # connect with the right client, no password typed
 | `layerbase redis-cli <db>` | Connect to a Redis / Valkey database. |
 | `layerbase mysql <db>` | Connect to a MySQL / MariaDB database. |
 | `layerbase connection-string <db>` | Print the connection string (reveals the password). |
-| `layerbase spindb [args...]` | Run the local spindb CLI (passes args through). |
+| `layerbase start <name>` | Start a local database container (spindb-backed). |
+| `layerbase stop <name>` | Stop a local database container (spindb-backed). |
+| `layerbase spindb [args...]` | Run the local spindb CLI (forwards **all** args, flags included). |
 | `layerbase alias` | Set up the short `lb` command (only if it is free). |
 
 `<db>` accepts a cloud database id or its name. Add `--print` to `connect` to
 show the connection details instead of launching a client.
+
+`start` and `stop` are local-only shortcuts for spindb containers; they never
+touch cloud databases. `layerbase spindb ...` forwards every argument through to
+spindb verbatim, including flags such as `--json`, `--engine`, and `--force`.
 
 ## Interactive menu
 
