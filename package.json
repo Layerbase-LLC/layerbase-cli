@@ -1,6 +1,6 @@
 {
   "name": "layerbase",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "Layerbase cloud CLI: connect to your managed databases without leaking the connection string into shell history.",
   "type": "module",
   "bin": {
@@ -24,7 +24,8 @@
     "format": "prettier --write .",
     "lint": "eslint .",
     "check:types": "tsc --noEmit",
-    "check": "tsc --noEmit && eslint .",
+    "check:collisions": "tsx scripts/check-spindb-collisions.ts",
+    "check": "tsc --noEmit && eslint . && pnpm check:collisions",
     "prepack": "pnpm build"
   },
   "dependencies": {
