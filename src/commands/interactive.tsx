@@ -10,7 +10,7 @@ import { decodeTokenClaims } from '@/lib/token'
 import { resolveInput, availableCommands } from '@/lib/commands'
 import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
-import { runSpindb, runLocalLifecycle } from '@/lib/run-spindb'
+import { runSpindb } from '@/lib/run-spindb'
 import { connectToDatabase } from '@/commands/connect'
 import { runClone } from '@/commands/clone'
 import { App } from '@/ui/app'
@@ -128,10 +128,6 @@ async function dispatch(
       return 'continue'
     case 'spindb':
       await runSpindb(args)
-      return 'continue'
-    case 'start':
-    case 'stop':
-      await runLocalLifecycle(name, args)
       return 'continue'
     case 'connect':
       await runConnectFlow(args[0])
