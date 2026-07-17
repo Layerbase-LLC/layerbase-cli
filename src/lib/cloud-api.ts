@@ -1,4 +1,9 @@
 import { loadCredentials } from '@/lib/config'
+import { getVersion } from '@/lib/version'
+
+// Sent on every cloud API request so CLI traffic is attributable in server logs
+// (vs the desktop app or the dashboard). Read from package.json, not hardcoded.
+const USER_AGENT = `layerbase-cli/${getVersion()}`
 
 // These /api/cli/* endpoints and the /auth/cli login pages are implemented in
 // the layerbase web app (app/(frontend)/api/cli/* and app/(frontend)/auth/cli/*).
@@ -58,6 +63,7 @@ async function authedFetch(
     headers: {
       authorization: `Bearer ${credentials.token}`,
       'content-type': 'application/json',
+      'user-agent': USER_AGENT,
       ...init?.headers,
     },
   })
@@ -72,7 +78,7 @@ async function authedFetch(
     const body = await response.text().catch(() => '')
     throw new Error(
       `Cloud API ${response.status}: ${body || response.statusText}. ` +
-        'Check the database id or name (`layerbase ls`).',
+        'Check the database id or name (`layerbase cloud ls`).',
     )
   }
 
