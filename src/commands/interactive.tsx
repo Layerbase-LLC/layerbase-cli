@@ -23,6 +23,7 @@ const BACK = '__back__'
 
 function accountText(creds: StoredCredentials | null): string {
   if (!creds) return 'Not signed in'
+  if (!creds.token) return creds.apiKey ? 'Signed in with API key' : 'Signed in'
   const email = decodeTokenClaims(creds.token)?.email
   return email ? `Signed in as ${email}` : 'Signed in'
 }
