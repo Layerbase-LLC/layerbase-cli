@@ -18,7 +18,7 @@ export function Whoami({ json }: { json: boolean }) {
   useEffect(() => {
     async function fetchAndSetWhoami() {
       const creds = await loadCredentials()
-      if (!creds) {
+      if (!creds?.token) {
         if (json) {
           process.stdout.write(`${JSON.stringify({ loggedIn: false })}\n`)
         }

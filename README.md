@@ -65,21 +65,82 @@ These are the only verbs layerbase owns; everything else is spindb.
 | Command | Description |
 | --- | --- |
 | `lbase login` | Sign in via the browser; stores a token in `~/.layerbase-cli`. |
+| `lbase login --api-key <key>` | Save a personal `sk_` API key for headless use (no browser). |
 | `lbase logout` | Remove the stored credentials. |
-| `lbase whoami` | Show the signed-in account and token expiry (`--json`). |
+| `lbase whoami` | Show the signed-in account (and API-key usage in key mode) (`--json`). |
 | `lbase cloud ls` | List your cloud databases (`--json` for scripting). |
+| `lbase cloud create <name> --engine <e> [--ttl 2h]` | Provision a database (`--ttl` makes it transient). |
+| `lbase cloud delete <db> --yes` | Delete a database (`--yes`/`-y` to skip the prompt). |
+| `lbase cloud start <db>` / `stop <db>` | Start or stop a database. |
+| `lbase cloud branch <db> <name>` | Create or reuse a branch (idempotent). |
+| `lbase cloud branch reset <db> <name>` | Re-fork a branch from its parent. |
+| `lbase cloud branch delete <db> <name>` | Delete a branch. |
+| `lbase cloud branch ls <db>` | List a database's branches (`--json`). |
 | `lbase cloud connect <db>` | Connect with the engine's native client. |
 | `lbase cloud clone <db> [name]` | Clone a cloud database into a local spindb container. |
-| `lbase cloud connection-string <db>` | Print the connection string (reveals the password; alias: `url`). |
+| `lbase cloud connection-string <db>` | Print the connection string (reveals the password; alias: `url`; `--json`). |
 | `lbase psql <db>` | Connect to a cloud Postgres-family database. |
 | `lbase redis-cli <db>` | Connect to a cloud Redis / Valkey database. |
 | `lbase mysql <db>` | Connect to a cloud MySQL / MariaDB database. |
+| `lbase agent init [--global]` | Install the Layerbase skill for AI coding agents. |
 | `lbase alias` | Set up the short `lb` command (only if it is free). |
 | `lbase chat` | Interactive console for your Layerbase account. |
 
 `<db>` accepts a cloud database id or its name. Add `--print` to
 `cloud connect` to show the connection details instead of launching a client.
-`lbase cloud` with no subcommand prints the cloud help.
+`lbase cloud` with no subcommand prints the cloud help. Cloud mutation commands
+(`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
+need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
+supports `--json` and returns a meaningful exit code.
+
+## Headless auth (CI and agents)
+
+For CI pipelines and coding agents, authenticate with a personal API key instead
+of the browser flow. Create one in the dashboard at
+`https://layerbase.com/cloud/settings`, then either export it or save it:
+
+```bash
+export LAYERBASE_API_KEY=sk_...        # env var: no login step needed at all
+# or
+lbase login --api-key sk_...           # persists it to ~/.layerbase-cli (0600)
+# or, per-invocation
+lbase cloud ls --api-key sk_... --json
+```
+
+Precedence is `--api-key` flag > `LAYERBASE_API_KEY` env > stored key. When a key
+is in play, cloud calls go **directly** to the cloud API (the browser-JWT proxy
+is skipped). Note: a key is tied to one account and works against your primary
+control plane.
+
+A transient database auto-deletes at its TTL, so a crashed CI run cannot strand
+a database against your quota. Where the engine supports branching, a
+branch-per-run (branch from a seeded parent, `reset` between runs, `delete` on
+teardown) is the cheaper CI primitive.
+
+```yaml
+# .github/workflows/test.yml (excerpt)
+env:
+  LAYERBASE_API_KEY: ${{ secrets.LAYERBASE_API_KEY }}
+steps:
+  - run: npm i -g layerbase
+  - run: |
+      DB=$(lbase cloud create "ci-$GITHUB_RUN_ID" --engine postgresql --ttl 2h --json)
+      echo "DATABASE_URL=$(echo "$DB" | jq -r .connectionString)" >> "$GITHUB_ENV"
+  - run: npm test
+  - if: always()
+    run: lbase cloud delete "ci-$GITHUB_RUN_ID" --yes || true
+```
+
+Exit codes for scripting: `0` success, `1` usage/generic, `3` auth (invalid or
+revoked key), `4` account paused, `5` capacity, `6` quota or rate limit.
+
+## Agents
+
+`lbase agent init` installs the Layerbase skill so a coding agent (Claude Code,
+etc.) knows how to use Layerbase. It writes `./.claude/skills/layerbase/SKILL.md`
+(or `~/.claude/skills/layerbase/SKILL.md` with `--global`), fetching the latest
+skill from `https://layerbase.com/skill.md` and falling back to the bundled copy
+offline. It then prints an `AGENTS.md` snippet for Codex and other agents.
 
 **Rule of thumb: bare = spindb, cloud = `lbase cloud <verb>`.** So `lbase ls`
 lists your **local** containers (spindb) and `lbase cloud ls` lists your
@@ -140,6 +201,9 @@ delivered to a loopback address. It is stored at
 `~/.layerbase-cli/credentials.json` (mode `0600`). This mirrors how the
 Layerbase desktop app signs in. Run `layerbase logout` to remove it.
 
+For non-interactive use (CI, agents), skip the browser entirely with an API key:
+see [Headless auth](#headless-auth-ci-and-agents).
+
 ## The `lb` shortcut
 
 The CLI installs as `layerbase` and `lbase`. For a two-letter `lb`, run
@@ -152,7 +216,9 @@ alone and suggests a shell alias instead.
 
 | Variable | Purpose |
 | --- | --- |
-| `LAYERBASE_API_URL` | Override the Layerbase API base (default `https://layerbase.com`). |
+| `LAYERBASE_API_KEY` | Personal `sk_` API key for headless cloud access (see [Headless auth](#headless-auth-ci-and-agents)). |
+| `LAYERBASE_API_URL` | Override the web API base used by the browser-login flow (default `https://layerbase.com`). |
+| `LAYERBASE_CLOUD_API_URL` | Override the cloud API base used in key mode (default `https://cloud.layerbase.dev`). |
 
 ## Requirements
 

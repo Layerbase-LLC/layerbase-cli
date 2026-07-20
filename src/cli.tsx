@@ -7,6 +7,12 @@ import { runClone } from '@/commands/clone'
 import { runSpindb } from '@/lib/run-spindb'
 import { registeredCommandNames } from '@/lib/commands'
 import { getVersion } from '@/lib/version'
+import { configureCloudAuth } from '@/lib/cloud-api'
+import { runWhoami } from '@/commands/whoami-run'
+import { runKeyLogin } from '@/commands/key-login'
+import { runCreate, runDestroy, runStart, runStop } from '@/commands/cloud-write'
+import { runBranch } from '@/commands/cloud-branch'
+import { runAgentInit } from '@/commands/agent-init'
 import type { CommandFlags } from '@/ui/app'
 
 const VERSION = getVersion()
@@ -23,12 +29,22 @@ const UNIFIED_HELP = `
   Cloud account
     login / logout / whoami       Manage your Layerbase session
     cloud ls                      List your cloud databases (--json to script)
+    cloud create <name> --engine <e> [--ttl 2h]  Provision a database
+    cloud delete <db> --yes       Delete a cloud database
+    cloud start / stop <db>       Start or stop a cloud database
+    cloud branch <db> <name>      Create/reset/delete/ls database branches
     cloud connect <db>            Connect with the engine's native client
     cloud clone <db> [name]       Clone a cloud database into local spindb
     cloud connection-string <db>  Print the connection string (reveals password)
     psql / mysql / redis-cli <db> Connect to a cloud database by engine
+    agent init [--global]         Install the Layerbase skill for AI agents
     alias                         Set up the short "lb" command
     chat                          Interactive console for your Layerbase account
+
+  Headless auth (CI / agents)
+    Set LAYERBASE_API_KEY (or pass --api-key) to run cloud commands with no
+    browser: calls go straight to the cloud API. "layerbase login --api-key
+    <key>" saves it. Create a key at https://layerbase.com/cloud/settings.
 
   Notes
     bare = spindb, cloud = "lbase cloud <verb>"
@@ -39,22 +55,32 @@ const UNIFIED_HELP = `
     $ lbase                          # spindb's interactive menu
     $ lbase create my-db --engine sqlite
     $ lbase login
-    $ lbase cloud ls
+    $ lbase cloud ls --json
+    $ LAYERBASE_API_KEY=sk_... lbase cloud create ci-db --engine postgresql --ttl 2h
     $ lbase psql my-cloud-db
 `
 
 const CLOUD_HELP = `
   Cloud account commands
 
-    login / logout / whoami        Manage your Layerbase session
     lbase cloud ls                 List your cloud databases (--json to script)
+    lbase cloud create <name> --engine <e> [--ttl 2h] [--json]
+                                   Provision a database (--ttl makes it transient)
+    lbase cloud delete <db> --yes  Delete a database (--yes to skip the prompt)
+    lbase cloud start <db>         Start a database
+    lbase cloud stop <db>          Stop a database
+    lbase cloud branch <db> <name>        Create or reuse a branch
+    lbase cloud branch reset <db> <name>  Re-fork a branch from its parent
+    lbase cloud branch delete <db> <name> Delete a branch
+    lbase cloud branch ls <db>            List a database branches
     lbase cloud connect <db>       Connect with the engine's native client
     lbase cloud clone <db> [name]  Clone a cloud database into local spindb
     lbase cloud connection-string <db> (alias: url)
                                    Print the connection string (reveals password)
     lbase psql / mysql / redis-cli <db>  Connect to a cloud database by engine
 
-  "<db>" accepts a cloud database id or its name.
+  "<db>" accepts a cloud database id or its name. Set LAYERBASE_API_KEY (or pass
+  --api-key) to run these headlessly with no browser login.
 `
 
 function printHelp(): void {
@@ -78,6 +104,26 @@ async function runCloud(rest: string[], flags: CommandFlags): Promise<void> {
   if (sub === 'ls') {
     render(<App command="ls" args={[]} flags={flags} />)
     return
+  }
+
+  if (sub === 'create') {
+    process.exit(await runCreate({ args: cloudArgs, flags }))
+  }
+
+  if (sub === 'delete' || sub === 'rm' || sub === 'destroy') {
+    process.exit(await runDestroy({ args: cloudArgs, flags }))
+  }
+
+  if (sub === 'start') {
+    process.exit(await runStart({ args: cloudArgs, flags }))
+  }
+
+  if (sub === 'stop') {
+    process.exit(await runStop({ args: cloudArgs, flags }))
+  }
+
+  if (sub === 'branch') {
+    process.exit(await runBranch({ args: cloudArgs, flags }))
   }
 
   if (sub === 'connect') {
@@ -169,8 +215,21 @@ const cli = meow(UNIFIED_HELP, {
     print: { type: 'boolean', default: false },
     json: { type: 'boolean', default: false },
     apiUrl: { type: 'string' },
+    // Headless auth: an sk_ key overrides the browser JWT and routes cloud
+    // calls straight to the cloud /v1 API.
+    apiKey: { type: 'string' },
+    // Cloud-mutation flags.
+    engine: { type: 'string' },
+    ttl: { type: 'string' },
+    yes: { type: 'boolean', default: false, shortFlag: 'y' },
+    force: { type: 'boolean', default: false },
+    global: { type: 'boolean', default: false },
   },
 })
+
+// The --api-key flag wins over LAYERBASE_API_KEY and the stored key. Set it once
+// before any cloud command runs.
+configureCloudAuth({ apiKey: cli.flags.apiKey })
 
 const EXEC_COMMANDS = new Set(['psql', 'redis-cli', 'mysql'])
 
@@ -179,6 +238,24 @@ const [command = '', ...rest] = cli.input
 if (command === 'help') {
   printHelp()
   process.exit(0)
+} else if (command === 'whoami') {
+  process.exit(await runWhoami({ json: cli.flags.json ?? false }))
+} else if (command === 'login' && cli.flags.apiKey) {
+  // Headless key login (no browser). Interactive browser login still runs via
+  // the Ink <Login> below when no --api-key is passed.
+  process.exit(
+    await runKeyLogin({
+      apiKey: cli.flags.apiKey,
+      json: cli.flags.json ?? false,
+    }),
+  )
+} else if (command === 'agent') {
+  const [sub] = rest
+  if (sub === 'init') {
+    process.exit(await runAgentInit({ flags: cli.flags }))
+  }
+  process.stderr.write('Usage: layerbase agent init [--global] [--force]\n')
+  process.exit(1)
 } else if (command === 'chat') {
   // chat is the ONLY entry into the Ink interactive console (the bare no-arg
   // launch moved to spindb). It needs a real terminal for the prompt.
