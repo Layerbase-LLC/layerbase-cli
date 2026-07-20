@@ -10,9 +10,16 @@ import { getVersion } from '@/lib/version'
 import { configureCloudAuth } from '@/lib/cloud-api'
 import { runWhoami } from '@/commands/whoami-run'
 import { runKeyLogin } from '@/commands/key-login'
-import { runCreate, runDestroy, runStart, runStop } from '@/commands/cloud-write'
+import {
+  runCreate,
+  runDestroy,
+  runStart,
+  runStop,
+} from '@/commands/cloud-write'
 import { runBranch } from '@/commands/cloud-branch'
 import { runAgentInit } from '@/commands/agent-init'
+import { runMigrate } from '@/commands/migrate'
+import { runImport } from '@/commands/import'
 import type { CommandFlags } from '@/ui/app'
 
 const VERSION = getVersion()
@@ -37,6 +44,8 @@ const UNIFIED_HELP = `
     cloud clone <db> [name]       Clone a cloud database into local spindb
     cloud connection-string <db>  Print the connection string (reveals password)
     psql / mysql / redis-cli <db> Connect to a cloud database by engine
+    migrate --source <s> --target <db>  Import an external database into a cloud DB
+    import <dumpfile> --target <db>      Import a dump file into a cloud database
     agent init [--global]         Install the Layerbase skill for AI agents
     alias                         Set up the short "lb" command
     chat                          Interactive console for your Layerbase account
@@ -83,8 +92,71 @@ const CLOUD_HELP = `
   --api-key) to run these headlessly with no browser login.
 `
 
+const MIGRATE_HELP = `
+  layerbase migrate - import an external database INTO a cloud database
+
+    layerbase migrate --source <id> --target <db-id-or-name> [creds] [--yes] [--json]
+
+  Sources and their credential flags
+    Connection-string sources (paste one URL with --connection-string, alias --url):
+      postgres    postgresql://user:password@host:5432/dbname
+      mysql       mysql://user:password@host:3306/dbname
+      mariadb     mysql://... (MariaDB is MySQL-compatible)
+      redis       redis:// or rediss://
+      valkey      redis:// or rediss://
+      vercel-kv   the KV_URL (rediss://) from your Vercel project
+
+    API-key sources (we discover the account, then you pick a database):
+      neon        --source-key <napi_...>
+      supabase    --source-key <sbp_...> --source-secret <db password>
+      render      --source-key <rnd_...>
+      railway     --source-key <token>
+      planetscale --source-key <service token> --source-id <service token id>
+      upstash     --source-key <mgmt api key> --source-id <account email>
+      algolia     --source-key <admin api key> --source-id <application id> (--app-id)
+      turso       --source-key <auth token> --source-id <libsql:// url> (--url)
+
+    Friendly aliases: --token = --source-key; --app-id / --email / --token-id / --url
+    fill --source-id; --db-password = --source-secret.
+
+  Picking a source database
+    --source-db <label-or-number>  choose among discovered databases in a non-TTY.
+
+  Output
+    --json prints ONE final JSON result object (no interim progress lines):
+      { ok, runId, status, databaseId, report }  on success
+      { ok: false, runId, status, error }         on failure
+    Without --json, status + progress lines stream to stdout while the run polls.
+
+  Credentials are never written to stdout, stderr, or --json output. In an
+  interactive terminal, missing credentials are prompted for; in CI, a missing
+  required flag exits 1 and lists what to pass.
+`
+
+const IMPORT_HELP = `
+  layerbase import - restore a dump file INTO a cloud database
+
+    layerbase import <dumpfile> --target <db-id-or-name> [--yes] [--json]
+
+  Uploads the dump straight to storage (presigned), then restores it over the
+  target database. Validates the file exists and is non-empty first and warns on
+  very large files; the server enforces the hard size cap. --json prints a final
+  { ok, message, database, engine, bytesUploaded } result.
+`
+
 function printHelp(): void {
   process.stdout.write(`${UNIFIED_HELP}\n`)
+}
+
+// Both migrate/import reach meow (registered verbs), which has autoHelp off, so
+// a --help/-h/`help` subtoken is handled here explicitly. Reads the raw argv for
+// the flag (meow strips it into flags) plus the parsed `help` subtoken.
+function wantsHelp(rest: string[]): boolean {
+  return (
+    process.argv.includes('--help') ||
+    process.argv.includes('-h') ||
+    rest[0] === 'help'
+  )
 }
 
 function printCloudHelp(): void {
@@ -224,6 +296,21 @@ const cli = meow(UNIFIED_HELP, {
     yes: { type: 'boolean', default: false, shortFlag: 'y' },
     force: { type: 'boolean', default: false },
     global: { type: 'boolean', default: false },
+    // migrate / import flags.
+    source: { type: 'string' },
+    target: { type: 'string' },
+    sourceDb: { type: 'string' },
+    connectionString: { type: 'string' },
+    sourceKey: { type: 'string' },
+    sourceId: { type: 'string' },
+    sourceSecret: { type: 'string' },
+    // Friendly per-source credential aliases (resolved in migrate.ts).
+    appId: { type: 'string' },
+    email: { type: 'string' },
+    tokenId: { type: 'string' },
+    token: { type: 'string' },
+    url: { type: 'string' },
+    dbPassword: { type: 'string' },
   },
 })
 
@@ -264,6 +351,18 @@ if (command === 'help') {
     process.exit(1)
   }
   await runInteractive(cli.flags)
+} else if (command === 'migrate') {
+  if (wantsHelp(rest)) {
+    process.stdout.write(`${MIGRATE_HELP}\n`)
+    process.exit(0)
+  }
+  process.exit(await runMigrate({ flags: cli.flags }))
+} else if (command === 'import') {
+  if (wantsHelp(rest)) {
+    process.stdout.write(`${IMPORT_HELP}\n`)
+    process.exit(0)
+  }
+  process.exit(await runImport({ args: rest, flags: cli.flags }))
 } else if (command === 'cloud') {
   await runCloud(rest, cli.flags)
 } else if (EXEC_COMMANDS.has(command)) {

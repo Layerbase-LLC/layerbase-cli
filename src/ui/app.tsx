@@ -17,6 +17,22 @@ export type CommandFlags = {
   yes?: boolean
   force?: boolean
   global?: boolean
+  // migrate / import flags.
+  source?: string
+  target?: string
+  sourceDb?: string
+  // Source credentials (never logged). Generic slots + friendly aliases that
+  // resolve into them (see src/commands/migrate.ts).
+  connectionString?: string
+  sourceKey?: string
+  sourceId?: string
+  sourceSecret?: string
+  appId?: string
+  email?: string
+  tokenId?: string
+  token?: string
+  url?: string
+  dbPassword?: string
 }
 
 type AppProps = {
