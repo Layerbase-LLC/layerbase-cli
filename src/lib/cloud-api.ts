@@ -112,8 +112,7 @@ function mapErrorMessage(
   // Typed codes carry the clearest intent regardless of their HTTP status.
   if (code === 'invalid_ttl') {
     return (
-      serverMessage ||
-      '--ttl must be a whole number of hours between 1 and 72.'
+      serverMessage || '--ttl must be a whole number of hours between 1 and 72.'
     )
   }
   if (code === 'branch_on_transient_forbidden') {
@@ -361,7 +360,9 @@ export async function resolveDatabaseId(ref: string): Promise<string> {
   })
 }
 
-export async function getConnectionInfo(dbRef: string): Promise<ConnectionInfo> {
+export async function getConnectionInfo(
+  dbRef: string,
+): Promise<ConnectionInfo> {
   const auth = await resolveAuth()
   if (auth.mode === 'jwt') {
     const response = await rawFetch(
@@ -506,4 +507,199 @@ export async function listBranches(parentId: string): Promise<BranchInfo[]> {
   )
   const data = (await response.json()) as { branches: BranchInfo[] }
   return data.branches
+}
+
+// ─── Migration (import an external database INTO a cloud database) ───────────
+//
+// Contract mirrors layerbase-cloud src/api/databases/import-export.ts:
+//   POST /v1/databases/:id/migrate-preflight   (connection-string sources only)
+//   POST /v1/databases/:id/migrate-from-source (202 + runId)
+//   GET  /v1/databases/:id/migration-runs/:runId (poll)
+//   POST /v1/migrations/discover               (api-key source listing)
+// All are /v1-only, so they run through keyFetch (headless key required).
+
+// Successful preflight (HTTP 200). A failed preflight (bad creds / unreachable
+// source) comes back as a non-2xx and is thrown as a CloudApiError instead.
+export type MigratePreflightResult = {
+  ok: boolean
+  provider?: string
+  rewritten?: boolean
+  note?: string | null
+  serverVersionNum?: number | null
+  sizeBytes?: number | null
+}
+
+export async function migratePreflight(options: {
+  targetId: string
+  connectionString: string
+}): Promise<MigratePreflightResult> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(options.targetId)}/migrate-preflight`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ connectionString: options.connectionString }),
+    },
+  )
+  return (await response.json()) as MigratePreflightResult
+}
+
+// Non-secret reference to one discoverable source database (the API key never
+// travels in it). Shape mirrors the cloud MigrationSourceRef.
+export type MigrationSourceRef = {
+  projectId?: string
+  branchId?: string
+  database?: string
+  role?: string
+  databaseId?: string
+  environmentId?: string
+  serviceId?: string
+  appId?: string
+  indexName?: string
+  label?: string
+}
+
+export type DiscoveredSource = {
+  ref: MigrationSourceRef
+  label: string
+  engine: string
+  sizeHint?: number | null
+  branchCount?: number
+}
+
+export async function discoverSources(options: {
+  provider: string
+  apiKey: string
+  apiKeyId?: string
+}): Promise<{
+  provider: string
+  engine: string
+  databases: DiscoveredSource[]
+}> {
+  const body: Record<string, unknown> = {
+    provider: options.provider,
+    apiKey: options.apiKey,
+  }
+  if (options.apiKeyId) body.apiKeyId = options.apiKeyId
+  const response = await keyFetch('/v1/migrations/discover', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return (await response.json()) as {
+    provider: string
+    engine: string
+    databases: DiscoveredSource[]
+  }
+}
+
+export type MigrationStartResult = {
+  runId: string
+  status: string
+  databaseId: string
+}
+
+// The body is EITHER { connectionString } (paste sources) or
+// { provider, apiKey, apiKeyId?, sourceSecret?, sourceRef } (api-key sources).
+// Kept as an opaque record so the credential shaping lives in the command layer.
+export async function migrateFromSource(options: {
+  targetId: string
+  body: Record<string, unknown>
+}): Promise<MigrationStartResult> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(options.targetId)}/migrate-from-source`,
+    { method: 'POST', body: JSON.stringify(options.body) },
+  )
+  return (await response.json()) as MigrationStartResult
+}
+
+export type MigrationRun = {
+  id: string
+  databaseId: string
+  status: string
+  sourceProvider: string | null
+  bytesEstimated: number | null
+  error: string | null
+  report: string | null
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
+export async function getMigrationRun(options: {
+  targetId: string
+  runId: string
+}): Promise<MigrationRun> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(options.targetId)}/migration-runs/` +
+      encodeURIComponent(options.runId),
+  )
+  return (await response.json()) as MigrationRun
+}
+
+// ─── Dump-file import (whole-DB restore via presigned R2 upload) ─────────────
+//
+//   POST /v1/databases/:id/import/presign  -> presigned PUT URL + r2Key
+//   PUT  <uploadUrl>                        (the file bytes, unauthenticated)
+//   POST /v1/databases/:id/import/from-r2  -> synchronous restore + report
+
+export type PresignImportResult = {
+  uploadUrl: string
+  r2Key: string
+  maxBytes: number
+  expiresInSeconds: number
+}
+
+export async function presignImport(
+  targetId: string,
+): Promise<PresignImportResult> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(targetId)}/import/presign`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+  return (await response.json()) as PresignImportResult
+}
+
+// PUT the dump bytes straight to R2. The URL is presigned (bucket + key +
+// expiry only, no signed content-type), so this carries NO Authorization
+// header - it must not, or the signature check fails. A non-2xx becomes a
+// CloudApiError so the command layer reports it uniformly.
+export async function uploadToPresignedUrl(
+  url: string,
+  body: Buffer | Uint8Array,
+): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(url, { method: 'PUT', body })
+  } catch (error) {
+    throw new CloudApiError({
+      status: 0,
+      message: `Upload failed: ${error instanceof Error ? error.message : 'network error'}`,
+    })
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new CloudApiError({
+      status: response.status,
+      message:
+        `Upload to storage failed (HTTP ${response.status}).` +
+        (detail ? ` ${detail.slice(0, 200)}` : ''),
+    })
+  }
+}
+
+export type ImportFromR2Result = {
+  message: string
+  database: string
+  engine: string
+  bytesUploaded: number
+}
+
+export async function importFromR2(options: {
+  targetId: string
+  r2Key: string
+}): Promise<ImportFromR2Result> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(options.targetId)}/import/from-r2`,
+    { method: 'POST', body: JSON.stringify({ r2Key: options.r2Key }) },
+  )
+  return (await response.json()) as ImportFromR2Result
 }

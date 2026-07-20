@@ -77,12 +77,25 @@ export const COMMANDS: CommandSpec[] = [
   },
   {
     name: 'cloud',
-    summary: 'Cloud database commands (ls, create, delete, start, stop, branch)',
+    summary:
+      'Cloud database commands (ls, create, delete, start, stop, branch)',
     cliOnly: true,
   },
   {
     name: 'agent',
     summary: 'Install the Layerbase agent skill (agent init)',
+    cliOnly: true,
+  },
+  {
+    name: 'migrate',
+    summary: 'Migrate an external database into a cloud database',
+    requiresAuth: true,
+    cliOnly: true,
+  },
+  {
+    name: 'import',
+    summary: 'Import a dump file into a cloud database',
+    requiresAuth: true,
     cliOnly: true,
   },
   {

@@ -82,6 +82,8 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase psql <db>` | Connect to a cloud Postgres-family database. |
 | `lbase redis-cli <db>` | Connect to a cloud Redis / Valkey database. |
 | `lbase mysql <db>` | Connect to a cloud MySQL / MariaDB database. |
+| `lbase migrate --source <id> --target <db>` | Migrate an external database into a cloud database. |
+| `lbase import <dumpfile> --target <db>` | Import a dump file into a cloud database. |
 | `lbase agent init [--global]` | Install the Layerbase skill for AI coding agents. |
 | `lbase alias` | Set up the short `lb` command (only if it is free). |
 | `lbase chat` | Interactive console for your Layerbase account. |
@@ -92,6 +94,44 @@ These are the only verbs layerbase owns; everything else is spindb.
 (`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
 supports `--json` and returns a meaningful exit code.
+
+## Migrations and imports
+
+`lbase migrate` imports an external database **into an existing cloud database**,
+and `lbase import` restores a whole-database dump file. Both are headless (need
+an API key), support `--json`, and never write credentials to stdout, stderr, or
+JSON output. Run `lbase migrate --help` for the full per-source flag list.
+
+```bash
+# Connection-string sources (paste one URL):
+lbase migrate --source postgres --target my-db \
+  --connection-string "postgresql://user:pass@host:5432/db" --yes
+
+# API-key sources (we discover the account, then you pick a database):
+lbase migrate --source neon    --target my-db --source-key napi_... --yes
+lbase migrate --source algolia --target my-search --source-key <admin-key> --app-id <app-id> --yes
+lbase migrate --source turso   --target my-libsql --source-key <token> --url libsql://... --yes
+
+# Whole-database dump import:
+lbase import ./backup.dump --target my-db --yes
+```
+
+Sources: `neon`, `supabase`, `render`, `railway`, `postgres`, `mysql`,
+`mariadb`, `planetscale`, `upstash`, `vercel-kv`, `redis`, `valkey`, `algolia`
+(to Meilisearch), `turso` (to libSQL). Connection-string sources
+(`postgres`/`mysql`/`mariadb`/`redis`/`valkey`/`vercel-kv`) take
+`--connection-string` (alias `--url`). API-key sources take `--source-key` (alias
+`--token`) plus, where needed, `--source-id` (aliases `--app-id`, `--email`,
+`--token-id`, `--url` for a Turso database URL) and `--source-secret` (alias
+`--db-password`, Supabase only). When multiple source databases are discovered,
+pick one with `--source-db <label-or-number>` (or interactively on a TTY).
+
+`--json` on `migrate` prints **one** final result object (no interim progress
+lines): `{ ok, runId, status, databaseId, report }` on success or
+`{ ok: false, runId, status, error }` on failure; without `--json`, status and
+progress stream while the migration run polls. `--yes` (`-y`) confirms
+non-interactively; a migration or import may overwrite the target's data, so a
+non-TTY run without `--yes` refuses and exits `1`.
 
 ## Headless auth (CI and agents)
 
