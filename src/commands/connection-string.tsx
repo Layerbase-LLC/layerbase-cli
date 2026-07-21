@@ -1,40 +1,50 @@
 import { useEffect, useState } from 'react'
-import { Text, useApp } from 'ink'
+import { useApp } from 'ink'
 import { getConnectionInfo } from '@/lib/cloud-api'
 import { buildConnectionString } from '@/lib/format'
+import { reportError } from '@/lib/cli-output'
 
-type State =
-  | { kind: 'loading' }
-  | { kind: 'error'; message: string }
-  | { kind: 'done' }
+type State = { kind: 'loading' } | { kind: 'done' }
 
 // Opt-in escape hatch: prints the full connection string (with password) to
-// stdout for piping into an app. The secure path is `layerbase connect`.
-export function ConnectionString({ dbRef }: { dbRef: string | undefined }) {
+// stdout for piping into an app. With --json it prints { connectionString }.
+// The secure path is `layerbase connect`.
+export function ConnectionString({
+  dbRef,
+  json,
+}: {
+  dbRef: string | undefined
+  json: boolean
+}) {
   const { exit } = useApp()
   const [state, setState] = useState<State>({ kind: 'loading' })
 
   useEffect(() => {
     async function fetchAndPrintConnectionString() {
       if (!dbRef) {
-        setState({
-          kind: 'error',
-          message: 'Usage: layerbase connection-string <db>',
-        })
-        process.exitCode = 1
+        process.exitCode = reportError(
+          new Error('Usage: layerbase cloud connection-string <db>'),
+          json,
+        )
+        setState({ kind: 'done' })
         return
       }
       try {
         const info = await getConnectionInfo(dbRef)
-        process.stdout.write(`${buildConnectionString(info)}\n`)
+        const connectionString = buildConnectionString(info)
+        if (json) {
+          process.stdout.write(`${JSON.stringify({ connectionString })}\n`)
+        } else {
+          process.stdout.write(`${connectionString}\n`)
+        }
         setState({ kind: 'done' })
       } catch (error) {
-        setState({ kind: 'error', message: (error as Error).message })
-        process.exitCode = 1
+        process.exitCode = reportError(error, json)
+        setState({ kind: 'done' })
       }
     }
     fetchAndPrintConnectionString()
-  }, [dbRef])
+  }, [dbRef, json])
 
   useEffect(() => {
     if (state.kind !== 'loading') {
@@ -42,8 +52,5 @@ export function ConnectionString({ dbRef }: { dbRef: string | undefined }) {
     }
   }, [state, exit])
 
-  if (state.kind === 'error') {
-    return <Text color="red">{state.message}</Text>
-  }
   return null
 }

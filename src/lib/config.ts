@@ -10,10 +10,15 @@ const CREDENTIALS_FILE = join(CONFIG_DIR, 'credentials.json')
 
 export type StoredCredentials = {
   apiUrl: string
-  // The 30-day Layerbase CLI token (JWT), sent as `Authorization: Bearer`.
-  token: string
+  // The 30-day Layerbase CLI token (JWT), sent as `Authorization: Bearer` for
+  // the interactive browser-login path. Absent for a headless key-only login.
+  token?: string
   // Cached cloud API key from /api/cli/whoami, like the desktop app stores.
   cloudApiKey?: string | null
+  // A personal `sk_` API key saved by `layerbase login --api-key <key>`. When
+  // present, cloud calls go DIRECTLY to the cloud /v1 API (no browser, no JWT).
+  // This is distinct from `cloudApiKey`, the internal web-app credential.
+  apiKey?: string
 }
 
 export async function saveCredentials(
@@ -42,4 +47,27 @@ export async function clearCredentials(): Promise<void> {
 
 export function credentialsPath(): string {
   return CREDENTIALS_FILE
+}
+
+// The stored personal `sk_` key, if a headless `login --api-key` saved one.
+// The env var and the --api-key flag take precedence over this (see
+// resolveApiKey in cloud-api), so this is only the lowest-priority source.
+export async function loadStoredApiKey(): Promise<string | null> {
+  const credentials = await loadCredentials()
+  return credentials?.apiKey ?? null
+}
+
+// Persist a personal API key without a browser login (CI/agents). Preserves any
+// existing JWT/apiUrl so a user who logged in interactively and then adds a key
+// keeps both.
+export async function saveApiKey(options: {
+  apiKey: string
+  apiUrl: string
+}): Promise<void> {
+  const existing = await loadCredentials()
+  await saveCredentials({
+    ...(existing ?? {}),
+    apiUrl: existing?.apiUrl ?? options.apiUrl,
+    apiKey: options.apiKey,
+  })
 }

@@ -10,6 +10,29 @@ export type CommandFlags = {
   print?: boolean
   json?: boolean
   apiUrl?: string
+  // Headless auth + cloud-mutation flags (see src/cli.tsx meow config).
+  apiKey?: string
+  engine?: string
+  ttl?: string
+  yes?: boolean
+  force?: boolean
+  global?: boolean
+  // migrate / import flags.
+  source?: string
+  target?: string
+  sourceDb?: string
+  // Source credentials (never logged). Generic slots + friendly aliases that
+  // resolve into them (see src/commands/migrate.ts).
+  connectionString?: string
+  sourceKey?: string
+  sourceId?: string
+  sourceSecret?: string
+  appId?: string
+  email?: string
+  tokenId?: string
+  token?: string
+  url?: string
+  dbPassword?: string
 }
 
 type AppProps = {
@@ -31,7 +54,7 @@ export function App({ command, args, flags }: AppProps) {
     case 'alias':
       return <Alias />
     case 'connection-string':
-      return <ConnectionString dbRef={args[0]} />
+      return <ConnectionString dbRef={args[0]} json={flags.json ?? false} />
     default:
       return <Unknown command={command} />
   }
