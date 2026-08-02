@@ -245,6 +245,16 @@ export type CloudDatabase = {
   transient?: boolean
   expiresAt?: string | null
   expires_at?: string | null
+  // Branch identity. The cloud list returns primaries and branches in ONE flat
+  // array, so without these a branch reads as another database the account is
+  // billed for - it is not, branches have their own per-plan limits. parentId
+  // is the parent database's id, parentName its display name; both absent or
+  // null on a primary. Optional so the CLI keeps working against a cloud build
+  // that predates them: parentName shipped after parentId, so a branch may
+  // carry the id alone.
+  parentId?: string | null
+  parentName?: string | null
+  branchedAt?: string | null
 }
 
 export type ConnectionInfo = {
