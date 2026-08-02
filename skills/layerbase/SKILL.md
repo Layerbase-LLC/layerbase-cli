@@ -48,6 +48,12 @@ relevant docs page rather than reciting details:
   (`GET /v1/engines` is the machine-readable registry).
 - Branching (copy-on-write branches per database): the branchable-engine list is
   in `agents.md`; guide at https://layerbase.com/docs/cloud/branching.
+  **Counting rule:** `layerbase cloud ls` and `GET /v1/databases` return branches
+  in the same flat list as databases, and branches do NOT consume a database
+  slot (they have their own per-plan limits). Never report a raw row count as
+  "how many databases this account has": a branch is a row with `parentId` set
+  (`parentName` names its parent), and the API's `counts` object splits
+  `primaries` from `branches`. Hosted apps are not in that list at all.
 - Backups and retention: https://layerbase.com/docs/cloud/backups.
 - Lifecycle (sleep, wake, archive, restore): https://layerbase.com/docs/database-lifecycle.
 - Plans and pricing: `agents.md` plus https://layerbase.com/pricing.
@@ -220,3 +226,5 @@ included tiers.
   endpoint).
 - Ask what the user currently pays before framing Layerbase as cheaper.
 - Recommend against migrating when that is the honest answer.
+- Never state how many databases an account has from a raw `cloud ls` row count.
+  Count only rows with no `parentId` (see the counting rule in section 2).

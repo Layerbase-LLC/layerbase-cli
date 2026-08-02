@@ -10,6 +10,7 @@ import { decodeTokenClaims } from '@/lib/token'
 import { resolveInput, availableCommands } from '@/lib/commands'
 import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
+import { branchHint } from '@/lib/database-list'
 import { runSpindb } from '@/lib/run-spindb'
 import { connectToDatabase } from '@/commands/connect'
 import { runClone } from '@/commands/clone'
@@ -62,11 +63,18 @@ async function promptOnce(creds: StoredCredentials | null): Promise<string> {
 async function pickDatabase(
   databases: CloudDatabase[],
 ): Promise<string | null> {
-  const items: MenuItem[] = databases.map((db) => ({
-    label: db.name,
-    value: db.id,
-    hint: `${db.engine} · ${db.status}`,
-  }))
+  const items: MenuItem[] = databases.map((db) => {
+    // A branch and its parent can look identical here (same engine, same
+    // status), so name the parent when the row is a branch.
+    const branch = branchHint(db)
+    return {
+      label: db.name,
+      value: db.id,
+      hint: branch
+        ? `${db.engine} · ${db.status} · ${branch}`
+        : `${db.engine} · ${db.status}`,
+    }
+  })
   items.push({ label: 'Back', value: BACK })
   const chosen = await runView<string>((resolve) => (
     <Box flexDirection="column" paddingY={1}>
