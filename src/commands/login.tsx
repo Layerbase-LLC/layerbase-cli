@@ -27,13 +27,20 @@ export function Login({ flags }: { flags: CommandFlags }) {
         })
         setPhase({ kind: 'finishing' })
         // Save the token first so whoami() can read it, then enrich with the
-        // cloud API key (best-effort, mirrors how desktop backfills it).
+        // cloud API key (best-effort, mirrors how desktop backfills it). The
+        // key MUST land in `apiKey`, the one slot loadStoredApiKey reads: every
+        // mutation (cloud create/delete/branch) is cloud /v1-only and refuses
+        // to run on a browser JWT alone.
         await saveCredentials({ apiUrl, token })
         let email = ''
         try {
           const me = await whoami()
           email = me.user.email
-          await saveCredentials({ apiUrl, token, cloudApiKey: me.cloudApiKey })
+          await saveCredentials({
+            apiUrl,
+            token,
+            ...(me.cloudApiKey ? { apiKey: me.cloudApiKey } : {}),
+          })
         } catch {
           // Token is already saved; enrichment is non-fatal.
         }

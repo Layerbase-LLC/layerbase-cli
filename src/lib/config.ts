@@ -13,11 +13,15 @@ export type StoredCredentials = {
   // The 30-day Layerbase CLI token (JWT), sent as `Authorization: Bearer` for
   // the interactive browser-login path. Absent for a headless key-only login.
   token?: string
-  // Cached cloud API key from /api/cli/whoami, like the desktop app stores.
+  // LEGACY (<= 1.2.0): where the browser login used to cache the cloud API key
+  // from /api/cli/whoami. Nothing ever read it, so every mutation failed after
+  // an interactive login. Both logins now write `apiKey`; this field is only
+  // still read (see pickStoredApiKey) so existing files heal without a re-login.
   cloudApiKey?: string | null
-  // A personal `sk_` API key saved by `layerbase login --api-key <key>`. When
-  // present, cloud calls go DIRECTLY to the cloud /v1 API (no browser, no JWT).
-  // This is distinct from `cloudApiKey`, the internal web-app credential.
+  // The `sk_` cloud API key. Written by BOTH login paths: `login --api-key
+  // <key>` (a personal key) and the browser login (the account key returned by
+  // /api/cli/whoami). When present, cloud calls that have no web-proxy
+  // equivalent - every mutation, plus /v1/me - go DIRECTLY to the cloud /v1 API.
   apiKey?: string
 }
 
@@ -49,12 +53,20 @@ export function credentialsPath(): string {
   return CREDENTIALS_FILE
 }
 
-// The stored personal `sk_` key, if a headless `login --api-key` saved one.
-// The env var and the --api-key flag take precedence over this (see
+// The stored `sk_` key from either login path, with a fallback to the legacy
+// `cloudApiKey` slot so a credentials file written by <= 1.2.0's browser login
+// keeps working. Pure so the fallback is unit-testable without touching disk.
+export function pickStoredApiKey(
+  credentials: StoredCredentials | null,
+): string | null {
+  return credentials?.apiKey || credentials?.cloudApiKey || null
+}
+
+// The stored `sk_` key, if either `layerbase login` or `login --api-key` saved
+// one. The env var and the --api-key flag take precedence over this (see
 // resolveApiKey in cloud-api), so this is only the lowest-priority source.
 export async function loadStoredApiKey(): Promise<string | null> {
-  const credentials = await loadCredentials()
-  return credentials?.apiKey ?? null
+  return pickStoredApiKey(await loadCredentials())
 }
 
 // Persist a personal API key without a browser login (CI/agents). Preserves any
