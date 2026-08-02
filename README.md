@@ -68,7 +68,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase login --api-key <key>` | Save a personal `sk_` API key for headless use (no browser). |
 | `lbase logout` | Remove the stored credentials. |
 | `lbase whoami` | Show the signed-in account (and API-key usage in key mode) (`--json`). |
-| `lbase cloud ls` | List your cloud databases (`--json` for scripting). |
+| `lbase cloud ls` | List your cloud databases and branches (`--json` for scripting). |
 | `lbase cloud create <name> --engine <e> [--ttl 2h]` | Provision a database (`--ttl` makes it transient). |
 | `lbase cloud delete <db> --yes` | Delete a database (`--yes`/`-y` to skip the prompt). |
 | `lbase cloud start <db>` / `stop <db>` | Start or stop a database. |
@@ -90,6 +90,13 @@ These are the only verbs layerbase owns; everything else is spindb.
 
 `<db>` accepts a cloud database id or its name. Add `--print` to
 `cloud connect` to show the connection details instead of launching a client.
+
+`cloud ls` lists databases **and their branches** in one table. When the account
+has branches, a `PARENT` column names each branch's parent database (`-` on a
+primary) and a footer splits the rows, because branches do not count toward your
+plan's database limit: never read the row count as your database count. In
+`--json`, a branch is any row with `parentId` set (`parentName` names its
+parent); rows are passed through from the API untouched.
 `lbase cloud` with no subcommand prints the cloud help. Cloud mutation commands
 (`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one

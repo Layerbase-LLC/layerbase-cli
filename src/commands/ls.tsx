@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner'
 import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
 import { reportError } from '@/lib/cli-output'
+import { hasBranches, parentLabel, summaryLine } from '@/lib/database-list'
 
 type State =
   | { kind: 'loading' }
@@ -25,6 +26,14 @@ function pad(value: string, width: number): string {
   return value.length >= width
     ? value
     : value + ' '.repeat(width - value.length)
+}
+
+// Same as pad, but never overflows the column. Used for PARENT, whose value is
+// another database's name (or, against an older API, a raw uuid).
+function fit(value: string, width: number): string {
+  if (value.length < width) return pad(value, width)
+  // Keep one trailing space so a long value cannot run into the next column.
+  return `${value.slice(0, width - 4)}... `
 }
 
 // Transient (TTL) databases show their expiry so they are not mistaken for a
@@ -89,11 +98,17 @@ export function List({ json }: { json: boolean }) {
     return <Text>No databases yet. Create one at https://layerbase.com.</Text>
   }
 
+  // The PARENT column only appears when the account actually has branches, so
+  // the table stays exactly as wide as before for everyone else.
+  const showParent = hasBranches(state.databases)
+  const summary = summaryLine(state.databases)
+
   return (
     <Box flexDirection="column">
       <Text bold>
         {pad('NAME', 24)}
         {pad('ENGINE', 14)}
+        {showParent ? pad('PARENT', 20) : ''}
         {pad('STATUS', 14)}
         {pad('EXPIRES', 20)}
         ID
@@ -102,6 +117,7 @@ export function List({ json }: { json: boolean }) {
         <Text key={db.id}>
           {pad(db.name, 24)}
           {pad(db.engine, 14)}
+          {showParent ? fit(parentLabel(db), 20) : ''}
           <Text color={STATUS_COLOR[db.status] ?? 'white'}>
             {pad(db.status, 14)}
           </Text>
@@ -109,6 +125,11 @@ export function List({ json }: { json: boolean }) {
           {db.id}
         </Text>
       ))}
+      {summary ? (
+        <Box marginTop={1}>
+          <Text dimColor>{summary}</Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }
