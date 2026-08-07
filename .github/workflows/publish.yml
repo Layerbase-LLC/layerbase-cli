@@ -6,7 +6,7 @@ on:
 
 jobs:
   pre-publish-check:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       current_version: ${{ steps.current_version.outputs.version }}
       npm_version: ${{ steps.npm_version.outputs.version }}
@@ -54,7 +54,7 @@ jobs:
 
   publish:
     needs: pre-publish-check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: read
       id-token: write
