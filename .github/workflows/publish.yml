@@ -3,10 +3,18 @@ name: Publish to npm
 on:
   push:
     branches: [main]
+  # Manual retry from the Actions tab after a transient publish failure, so a
+  # failed release does not need another dev -> main merge to re-fire. Safe to
+  # re-run: pre-publish-check refuses when the version is already on npm.
+  workflow_dispatch:
 
+# This workflow MUST stay on GitHub-hosted runners: npm rejects sigstore
+# provenance bundles from self-hosted runners (E422 "Unsupported GitHub Actions
+# runner environment: self-hosted", hit 2026-08-12 after the Blacksmith
+# migration). Do not move these jobs to Blacksmith with the other workflows.
 jobs:
   pre-publish-check:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       current_version: ${{ steps.current_version.outputs.version }}
       npm_version: ${{ steps.npm_version.outputs.version }}
@@ -54,7 +62,7 @@ jobs:
 
   publish:
     needs: pre-publish-check
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
