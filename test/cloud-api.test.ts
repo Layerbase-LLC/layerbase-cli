@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pickApiKey, exitCodeForStatus } from '@/lib/cloud-api'
+import {
+  pickApiKey,
+  pickWebAppBaseUrl,
+  exitCodeForStatus,
+} from '@/lib/cloud-api'
 
 test('pickApiKey: flag wins over env and stored', () => {
   assert.equal(
@@ -42,4 +46,33 @@ test('exitCodeForStatus: distinct codes per failure class', () => {
   assert.equal(exitCodeForStatus(429), 6)
   assert.equal(exitCodeForStatus(400), 1)
   assert.equal(exitCodeForStatus(500), 1)
+})
+
+test('pickWebAppBaseUrl: --api-url wins over the logged-in host and the default', () => {
+  assert.equal(
+    pickWebAppBaseUrl({
+      flag: 'https://dev.layerbase.com',
+      stored: 'https://layerbase.com',
+      fallback: 'https://layerbase.com',
+    }),
+    'https://dev.layerbase.com',
+  )
+})
+
+test('pickWebAppBaseUrl: the logged-in host wins over the default', () => {
+  assert.equal(
+    pickWebAppBaseUrl({
+      stored: 'https://dev.layerbase.com',
+      fallback: 'https://layerbase.com',
+    }),
+    'https://dev.layerbase.com',
+  )
+})
+
+test('pickWebAppBaseUrl: falls back when nothing is configured', () => {
+  assert.equal(
+    pickWebAppBaseUrl({ stored: null, fallback: 'https://layerbase.com' }),
+    'https://layerbase.com',
+  )
+  assert.equal(typeof pickWebAppBaseUrl({}), 'string')
 })

@@ -98,6 +98,17 @@ export const COMMANDS: CommandSpec[] = [
     requiresAuth: true,
     cliOnly: true,
   },
+  // A BARE verb, not `cloud promote`, and the exception the rule allows:
+  // `spindb --help` (0.59.0) has no `promote` command or alias, and
+  // scripts/check-spindb-collisions.ts keeps that true. The verb is bare
+  // because the source it takes is a LOCAL file or container, so
+  // `lbase promote ./app.db` reads as a local-first action.
+  {
+    name: 'promote',
+    summary: 'Promote a local database or dump into a new cloud database',
+    requiresAuth: true,
+    cliOnly: true,
+  },
   {
     name: 'spindb',
     summary: 'Open the local spindb manager (forwards all args)',

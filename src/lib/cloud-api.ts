@@ -21,12 +21,41 @@ export function cloudApiBaseUrl(): string {
 }
 
 // Set once from the CLI flags (before any cloud call) so `--api-key` wins over
-// the env var and the stored key. Kept as module state to avoid threading an
-// auth argument through every command; the CLI is a single-shot process.
+// the env var and the stored key, and `--api-url` wins over the stored host.
+// Kept as module state to avoid threading an auth argument through every
+// command; the CLI is a single-shot process.
 let apiKeyFlag: string | undefined
+let apiUrlFlag: string | undefined
 
-export function configureCloudAuth(options: { apiKey?: string }): void {
+export function configureCloudAuth(options: {
+  apiKey?: string
+  apiUrl?: string
+}): void {
   apiKeyFlag = options.apiKey
+  apiUrlFlag = options.apiUrl
+}
+
+// Precedence for the WEB app base (dashboard links, the /auth/cli pages):
+// --api-url flag > the host the user actually logged into > LAYERBASE_API_URL /
+// the default. Pure so the precedence is unit-testable. NOT the same thing as
+// cloudApiBaseUrl(): cloud.layerbase.dev serves the /v1 API, not the dashboard.
+export function pickWebAppBaseUrl(sources: {
+  flag?: string
+  stored?: string | null
+  fallback?: string
+}): string {
+  return sources.flag || sources.stored || sources.fallback || DEFAULT_API_URL
+}
+
+// The web app base for user-facing links, resolved the same way every request
+// resolves its host instead of hardcoding the default.
+export async function webAppBaseUrl(): Promise<string> {
+  const credentials = await loadCredentials()
+  return pickWebAppBaseUrl({
+    flag: apiUrlFlag,
+    stored: credentials?.apiUrl,
+    fallback: DEFAULT_API_URL,
+  })
 }
 
 // Precedence: --api-key flag > LAYERBASE_API_KEY env > stored key file. Pure so
