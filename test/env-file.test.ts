@@ -1,6 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyEnvAssignment, quoteEnvValue } from '@/lib/env-file'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  applyEnvAssignment,
+  isMissingFileError,
+  quoteEnvValue,
+  readEnvFile,
+  writeEnvAssignment,
+} from '@/lib/env-file'
 
 const URL_A = 'postgresql://u:p@host:5432/db'
 const URL_B = 'postgresql://u:new@host:5432/db'
@@ -78,4 +94,67 @@ test('env: quotes values, escaping only when the value has a single quote', () =
   assert.equal(quoteEnvValue("pa'ss"), '"pa\'ss"')
   assert.equal(quoteEnvValue('say "hi"\\'), '\'say "hi"\\\'')
   assert.equal(quoteEnvValue('it\'s "x"\\'), '"it\'s \\"x\\"\\\\"')
+})
+
+// ─── Reading (data-loss guard) ──────────────────────────────────────────────
+
+test('env: only ENOENT counts as "no file yet"', () => {
+  assert.equal(isMissingFileError({ code: 'ENOENT' }), true)
+  assert.equal(isMissingFileError({ code: 'EACCES' }), false)
+  assert.equal(isMissingFileError({ code: 'EISDIR' }), false)
+  assert.equal(isMissingFileError(new Error('boom')), false)
+  assert.equal(isMissingFileError(null), false)
+})
+
+test('env: readEnvFile returns null for a missing file and contents otherwise', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'layerbase-env-'))
+  try {
+    const filePath = join(dir, '.env')
+    assert.equal(readEnvFile(filePath), null)
+    writeFileSync(filePath, 'PORT=3000\n')
+    assert.equal(readEnvFile(filePath), 'PORT=3000\n')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('env: a read failure that is NOT ENOENT is rethrown, never treated as missing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'layerbase-env-'))
+  try {
+    // A directory in the .env slot reads as EISDIR: an existing thing we cannot
+    // read, which must never be reported as "created" and overwritten.
+    const filePath = join(dir, 'env-dir')
+    mkdirSync(filePath)
+    assert.throws(() => readEnvFile(filePath))
+    assert.throws(() =>
+      writeEnvAssignment({
+        filePath,
+        key: 'DATABASE_URL',
+        value: URL_A,
+      }),
+    )
+    assert.equal(statSync(filePath).isDirectory(), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('env: writeEnvAssignment updates an existing file in place', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'layerbase-env-'))
+  try {
+    const filePath = join(dir, '.env')
+    writeFileSync(filePath, `PORT=3000\nDATABASE_URL='${URL_A}'\n`)
+    const action = writeEnvAssignment({
+      filePath,
+      key: 'DATABASE_URL',
+      value: URL_B,
+    })
+    assert.equal(action, 'updated')
+    assert.equal(
+      readFileSync(filePath, 'utf8'),
+      `PORT=3000\nDATABASE_URL='${URL_B}'\n`,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

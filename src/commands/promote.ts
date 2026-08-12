@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
   createDatabase,
-  DEFAULT_API_URL,
   getConnectionInfo,
   listDatabases,
+  webAppBaseUrl,
 } from '@/lib/cloud-api'
 import type { CreateDatabaseResult } from '@/lib/cloud-api'
 import { captureSpindb, parseLastJson } from '@/lib/run-spindb'
-import { confirm } from '@/lib/confirm'
+import { confirm, decideConfirmation } from '@/lib/confirm'
 import { reportError, writeJson } from '@/lib/cli-output'
 import { formatBytes, uploadAndImport } from '@/commands/import'
 import { writeEnvAssignment } from '@/lib/env-file'
@@ -113,8 +113,12 @@ async function resolveConnectionString(
   }
 }
 
-function dashboardUrl(id: string): string {
-  return new URL(`/cloud/${encodeURIComponent(id)}`, DEFAULT_API_URL).toString()
+// The link must point at the host the database was actually created on, so the
+// base is resolved the same way the cloud client resolves it (--api-url flag >
+// the logged-in host > LAYERBASE_API_URL / the default).
+async function dashboardUrl(id: string): Promise<string> {
+  const base = await webAppBaseUrl()
+  return new URL(`/cloud/${encodeURIComponent(id)}`, base).toString()
 }
 
 // `layerbase promote <source> [--from pglite] [--target pgsqlite] [--name db]
@@ -172,7 +176,20 @@ export async function runPromote(options: {
     `Promote ${describeSource(source)} to a new cloud ${target.engine} ` +
       `database named "${name}".`,
   )
-  if (interactive && !flags.yes) {
+  // Promote CREATES a billable cloud database, so a non-interactive run (no
+  // TTY, or --json) must carry --yes rather than proceed unconfirmed. This
+  // refusal happens before any network call, so nothing is provisioned.
+  const decision = decideConfirmation({
+    yes: flags.yes ?? false,
+    interactive,
+  })
+  if (decision === 'refuse') {
+    process.stderr.write(
+      'Refusing to create a cloud database without confirmation. Pass --yes (-y) to run non-interactively.\n',
+    )
+    return 1
+  }
+  if (decision === 'prompt') {
     const ok = await confirm('Continue?')
     if (!ok) {
       process.stdout.write('Aborted.\n')
@@ -230,9 +247,10 @@ export async function runPromote(options: {
       })
 
       const connectionString = await resolveConnectionString(created)
-      const url = dashboardUrl(created.id)
+      const url = await dashboardUrl(created.id)
 
       let envAction: string | undefined
+      let envError: string | undefined
       if (flags.writeEnv) {
         if (!connectionString) {
           process.stderr.write(
@@ -241,13 +259,28 @@ export async function runPromote(options: {
           )
         } else {
           const envPath = resolve(process.cwd(), '.env')
-          envAction = writeEnvAssignment({
-            filePath: envPath,
-            key: 'DATABASE_URL',
-            value: connectionString,
-          })
+          try {
+            envAction = writeEnvAssignment({
+              filePath: envPath,
+              key: 'DATABASE_URL',
+              value: connectionString,
+            })
+          } catch (error) {
+            // The data IS loaded at this point, so an unwritable .env is not an
+            // import failure and must not be reported as one. Say what failed
+            // and never claim the file was written.
+            envError = error instanceof Error ? error.message : String(error)
+            process.stderr.write(
+              `Skipped --write-env: could not update ${envPath}: ${envError}\n`,
+            )
+          }
         }
       }
+      const envResult = envAction
+        ? { path: '.env', action: envAction }
+        : envError
+          ? { path: '.env', error: envError }
+          : null
 
       if (json) {
         writeJson({
@@ -270,7 +303,7 @@ export async function runPromote(options: {
           connectionString,
           dashboardUrl: url,
           bytesUploaded: imported.bytesUploaded,
-          env: envAction ? { path: '.env', action: envAction } : null,
+          env: envResult,
         })
         return 0
       }

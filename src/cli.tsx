@@ -368,9 +368,9 @@ const cli = meow(UNIFIED_HELP, {
   },
 })
 
-// The --api-key flag wins over LAYERBASE_API_KEY and the stored key. Set it once
-// before any cloud command runs.
-configureCloudAuth({ apiKey: cli.flags.apiKey })
+// The --api-key flag wins over LAYERBASE_API_KEY and the stored key, and
+// --api-url over the stored host. Set once before any cloud command runs.
+configureCloudAuth({ apiKey: cli.flags.apiKey, apiUrl: cli.flags.apiUrl })
 
 const EXEC_COMMANDS = new Set(['psql', 'redis-cli', 'mysql'])
 

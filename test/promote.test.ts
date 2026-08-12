@@ -1,5 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { decideConfirmation } from '@/lib/confirm'
+import { buildSpindbSpawn } from '@/lib/run-spindb'
 import {
   classifySource,
   deriveDatabaseName,
@@ -326,4 +329,82 @@ test('name: sanitizes to a safe slug and never returns an empty name', () => {
   assert.equal(sanitizeDatabaseName('9lives'), 'db-9lives')
   assert.equal(sanitizeDatabaseName('a'.repeat(80)).length, 40)
   assert.equal(sanitizeDatabaseName('My App!!'), 'my-app')
+})
+
+// ─── Confirmation ───────────────────────────────────────────────────────────
+
+test('confirm: --yes proceeds in both interactive and non-interactive runs', () => {
+  assert.equal(decideConfirmation({ yes: true, interactive: true }), 'proceed')
+  assert.equal(decideConfirmation({ yes: true, interactive: false }), 'proceed')
+})
+
+test('confirm: an interactive run without --yes is prompted', () => {
+  assert.equal(decideConfirmation({ yes: false, interactive: true }), 'prompt')
+})
+
+test('confirm: a non-interactive run without --yes REFUSES (no TTY, or --json)', () => {
+  // The billable case: a piped or --json promote must never create a cloud
+  // database just because there is nobody to prompt.
+  assert.equal(decideConfirmation({ yes: false, interactive: false }), 'refuse')
+})
+
+// ─── spindb spawn ───────────────────────────────────────────────────────────
+
+test('spawn: passes argv through untouched off Windows, with no shell', () => {
+  const invocation = buildSpindbSpawn({
+    command: '/usr/local/bin/spindb',
+    args: ['backup', 'my db', '--output', '/tmp/out dir; rm -rf /'],
+    platform: 'linux',
+  })
+  assert.equal(invocation.command, '/usr/local/bin/spindb')
+  assert.deepEqual(invocation.args, [
+    'backup',
+    'my db',
+    '--output',
+    '/tmp/out dir; rm -rf /',
+  ])
+  assert.equal(invocation.windowsVerbatimArguments, false)
+})
+
+test('spawn: a resolved Windows .exe is spawned directly', () => {
+  const invocation = buildSpindbSpawn({
+    command: 'C:\\bin\\spindb.exe',
+    args: ['list', '--json'],
+    platform: 'win32',
+  })
+  assert.equal(invocation.command, 'C:\\bin\\spindb.exe')
+  assert.deepEqual(invocation.args, ['list', '--json'])
+  assert.equal(invocation.windowsVerbatimArguments, false)
+})
+
+test('spawn: a Windows batch shim goes through cmd.exe with every argument quoted', () => {
+  const invocation = buildSpindbSpawn({
+    command: 'C:\\Program Files\\nodejs\\spindb.cmd',
+    args: ['backup', 'my db', '--output', 'C:\\out dir & echo pwned'],
+    platform: 'win32',
+    comSpec: 'C:\\Windows\\system32\\cmd.exe',
+  })
+  assert.equal(invocation.command, 'C:\\Windows\\system32\\cmd.exe')
+  assert.equal(invocation.windowsVerbatimArguments, true)
+  assert.deepEqual(invocation.args, [
+    '/d',
+    '/s',
+    '/c',
+    '""C:\\Program Files\\nodejs\\spindb.cmd" "backup" "my db" "--output" ' +
+      '"C:\\out dir & echo pwned""',
+  ])
+})
+
+test('spawn: run-spindb never passes shell to spawn', () => {
+  // The invariant this whole helper exists for: with `shell: true` an argument
+  // containing a space or a metacharacter would be re-split or interpreted.
+  const source = readFileSync(
+    new URL('../src/lib/run-spindb.ts', import.meta.url),
+    'utf8',
+  )
+  const code = source
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+  assert.equal(/\bshell\s*:/.test(code), false)
 })
