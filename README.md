@@ -33,6 +33,7 @@ This installs two commands, `layerbase` and a shorter `lbase`. For a two-letter
 lbase                        # spindb's interactive menu (local databases)
 lbase create my-db --engine postgres   # any spindb command, verbatim
 lbase login                  # sign in through your browser
+lbase promote ./app.db       # put a local database in the cloud, data included
 lbase cloud ls               # list your cloud databases
 lbase psql my-cloud-db       # connect with the right client, no password typed
 ```
@@ -82,6 +83,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase psql <db>` | Connect to a cloud Postgres-family database. |
 | `lbase redis-cli <db>` | Connect to a cloud Redis / Valkey database. |
 | `lbase mysql <db>` | Connect to a cloud MySQL / MariaDB database. |
+| `lbase promote <file-or-container>` | Create a cloud database from a local file or spindb container, data included. |
 | `lbase migrate --source <id> --target <db>` | Migrate an external database into a cloud database. |
 | `lbase import <dumpfile> --target <db>` | Import a dump file into a cloud database. |
 | `lbase agent init [--global]` | Install the Layerbase skill for AI coding agents. |
@@ -101,6 +103,64 @@ parent); rows are passed through from the API untouched.
 (`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
 supports `--json` and returns a meaningful exit code.
+
+## Promote a local database to the cloud
+
+`lbase promote` is the graduation path for a prototype: it creates a **new**
+cloud database sized to the source, imports the data, and prints the connection
+string. One command instead of create, dump, and import.
+
+```bash
+lbase promote ./app.db                    # SQLite file
+lbase promote ./analytics.duckdb          # DuckDB file
+lbase promote ./dump.sql                  # Postgres-dialect SQL dump
+lbase promote my-local-pg                 # a local spindb container
+lbase promote ./app.db --write-env --yes  # and rewrite DATABASE_URL in ./.env
+```
+
+The source is **detected, never guessed**: binary files are identified by their
+header (a `.db` that is really a DuckDB file is treated as DuckDB), `.sql` is a
+Postgres-dialect dump, and a bare name is looked up against your local spindb
+containers. Anything ambiguous fails with an actionable message; `--from
+pglite|sqlite|duckdb|sql|spindb` forces the kind.
+
+| Source | Cloud target |
+| --- | --- |
+| SQLite file (`.db`, `.sqlite`, `.sqlite3`) | `sqlite` (SQLite storage behind the Postgres wire) |
+| DuckDB file (`.duckdb`) | `duckdb` |
+| SQL dump (`.sql`), PGlite dump | `postgresql` |
+| spindb container | the same engine in the cloud |
+
+`--target libsql` is accepted but currently refused: cloud libSQL restores from a
+data-directory archive, not from a SQLite file, so there is no path that puts a
+local `.db` into it yet. Use the default (`--target pgsqlite`), or
+`lbase migrate --source turso` for an already-hosted libSQL database.
+Desktop-only engines (MongoDB, CockroachDB, SurrealDB) are refused with the
+licensing reason and the closest cloud alternative, and a spindb engine whose
+local backup format the cloud import endpoint cannot restore is refused with a
+pointer at `lbase migrate`. Every refusal happens **before** anything is created,
+so an unsupported source never leaves an empty database behind.
+
+**PGlite data directories** are not supported directly (that would put several MB
+of WASM in every install). Dump the directory first and promote the `.sql`:
+
+```js
+const db = await PGlite.create('./pgdata') // @electric-sql/pglite
+const dump = await pgDump({ pg: db }) // @electric-sql/pglite-tools/pg_dump
+await writeFile('./dump.sql', await dump.text()) // node:fs/promises
+```
+
+```bash
+lbase promote ./dump.sql
+```
+
+`--write-env` is opt-in: it rewrites `DATABASE_URL` in `./.env` (creating the
+file when missing), leaves every other line untouched, ignores commented-out
+assignments, and prints what it did. `--json` prints one result object with the
+database, the connection string, the dashboard URL, and the bytes uploaded.
+`--name` overrides the derived database name. If the import fails after the
+database is created, promote says the database exists and is empty and prints the
+exact retry and delete commands; it never deletes anything on your behalf.
 
 ## Migrations and imports
 

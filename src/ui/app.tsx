@@ -17,10 +17,14 @@ export type CommandFlags = {
   yes?: boolean
   force?: boolean
   global?: boolean
-  // migrate / import flags.
+  // migrate / import / promote flags.
   source?: string
   target?: string
   sourceDb?: string
+  // promote-only flags.
+  from?: string
+  name?: string
+  writeEnv?: boolean
   // Source credentials (never logged). Generic slots + friendly aliases that
   // resolve into them (see src/commands/migrate.ts).
   connectionString?: string

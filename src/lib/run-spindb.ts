@@ -80,6 +80,54 @@ export async function runSpindb(
   return spawnSpindb(args, { env: opts.env })
 }
 
+// Run spindb and CAPTURE its output instead of inheriting the terminal, for the
+// machine-readable probes (`list --json`, `backup --json`). Never used for
+// interactive passthrough, which must keep inherited stdio.
+export function captureSpindb(args: string[]): Promise<{
+  code: number
+  stdout: string
+  stderr: string
+}> {
+  const { command, baseArgs } = spindbInvocation()
+  return new Promise((resolve) => {
+    const child = spawn(command, [...baseArgs, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout?.on('data', (chunk) => {
+      stdout += String(chunk)
+    })
+    child.stderr?.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+    child.on('error', (error) => {
+      resolve({ code: 127, stdout, stderr: `${stderr}${error.message}` })
+    })
+    child.on('close', (code) => resolve({ code: code ?? 0, stdout, stderr }))
+  })
+}
+
+// spindb interleaves human progress lines with its `--json` result on stdout, so
+// pick the LAST line that parses as a JSON object.
+export function parseLastJson(output: string): Record<string, unknown> | null {
+  const lines = output.split('\n')
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]?.trim()
+    if (!line || !line.startsWith('{')) continue
+    try {
+      const parsed: unknown = JSON.parse(line)
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 // Whether a local spindb container with this name already exists. Uses
 // `spindb info <name> --json`, which exits non-zero when the container is
 // missing.
