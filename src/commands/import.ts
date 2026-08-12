@@ -7,7 +7,7 @@ import {
   uploadToPresignedUrl,
 } from '@/lib/cloud-api'
 import type { CloudDatabase, ImportFromR2Result } from '@/lib/cloud-api'
-import { confirm } from '@/lib/confirm'
+import { confirm, decideConfirmation } from '@/lib/confirm'
 import { reportError, writeJson } from '@/lib/cli-output'
 import type { CommandFlags } from '@/ui/app'
 
@@ -110,13 +110,17 @@ export async function runImport(options: {
           '  This restores the dump over the target and may overwrite existing data.\n',
       )
     }
-    if (!flags.yes) {
-      if (!interactive) {
-        process.stderr.write(
-          'Refusing to import without confirmation. Pass --yes (-y) to run non-interactively.\n',
-        )
-        return 1
-      }
+    const decision = decideConfirmation({
+      yes: flags.yes ?? false,
+      interactive,
+    })
+    if (decision === 'refuse') {
+      process.stderr.write(
+        'Refusing to import without confirmation. Pass --yes (-y) to run non-interactively.\n',
+      )
+      return 1
+    }
+    if (decision === 'prompt') {
       const ok = await confirm('Import this dump?')
       if (!ok) {
         process.stdout.write('Aborted.\n')

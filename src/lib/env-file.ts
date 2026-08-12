@@ -60,6 +60,26 @@ export function applyEnvAssignment(options: {
   return { contents: `${contents}${separator}${line}\n`, action: 'appended' }
 }
 
+// ONLY "the file is not there" may be treated as "no file yet". Any other read
+// failure (EACCES, EISDIR, EIO) means a file exists that we could not read, and
+// swallowing it would report `created` and then REPLACE that file with a single
+// line. Pure so the rule is testable without provoking a real EACCES.
+export function isMissingFileError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null | undefined)?.code === 'ENOENT'
+}
+
+// Read the file for rewriting: null when it does not exist, otherwise its
+// contents. Rethrows every other failure so the caller never clobbers a file it
+// could not read.
+export function readEnvFile(filePath: string): string | null {
+  try {
+    return readFileSync(filePath, 'utf8')
+  } catch (error) {
+    if (isMissingFileError(error)) return null
+    throw error
+  }
+}
+
 // Apply the assignment to a real file, creating it when missing.
 export function writeEnvAssignment(options: {
   filePath: string
@@ -67,12 +87,7 @@ export function writeEnvAssignment(options: {
   value: string
 }): EnvWriteAction {
   const { filePath, key, value } = options
-  let contents: string | null = null
-  try {
-    contents = readFileSync(filePath, 'utf8')
-  } catch {
-    contents = null
-  }
+  const contents = readEnvFile(filePath)
   const result = applyEnvAssignment({ contents, key, value })
   writeFileSync(filePath, result.contents, { mode: 0o600 })
   return result.action

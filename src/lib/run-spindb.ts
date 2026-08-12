@@ -2,19 +2,20 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, delimiter } from 'node:path'
 
-// Is spindb installed on PATH? If so we run it by bare name (spawn resolves it
-// via PATH); otherwise we run it through the package runner that launched
-// layerbase, so `npx layerbase` users get `npx spindb` with no global install.
-function spindbOnPath(): boolean {
+// Resolve an executable to a CONCRETE path on PATH (null when it is not there).
+// We resolve it ourselves rather than relying on a shell, because on Windows the
+// real file is a shim (`spindb.cmd`, `npx.cmd`) that bare-name spawn cannot find.
+function resolveOnPath(name: string): string | null {
   const exts =
     process.platform === 'win32' ? ['.cmd', '.exe', '.bat', ''] : ['']
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     if (!dir) continue
     for (const ext of exts) {
-      if (existsSync(join(dir, `spindb${ext}`))) return true
+      const candidate = join(dir, `${name}${ext}`)
+      if (existsSync(candidate)) return candidate
     }
   }
-  return false
+  return null
 }
 
 function detectPackageRunner(): string {
@@ -24,10 +25,61 @@ function detectPackageRunner(): string {
   return 'npx'
 }
 
+// If spindb is installed we run the resolved binary directly; otherwise we run
+// it through the package runner that launched layerbase, so `npx layerbase`
+// users get `npx spindb` with no global install. A runner that does not resolve
+// falls back to its bare name so the spawn error stays the familiar ENOENT.
 function spindbInvocation(): { command: string; baseArgs: string[] } {
-  return spindbOnPath()
-    ? { command: 'spindb', baseArgs: [] }
-    : { command: detectPackageRunner(), baseArgs: ['spindb'] }
+  const spindb = resolveOnPath('spindb')
+  if (spindb) return { command: spindb, baseArgs: [] }
+  const runner = detectPackageRunner()
+  return { command: resolveOnPath(runner) ?? runner, baseArgs: ['spindb'] }
+}
+
+const WINDOWS_BATCH_FILE = /\.(cmd|bat)$/i
+
+export type SpindbSpawn = {
+  command: string
+  args: string[]
+  windowsVerbatimArguments: boolean
+}
+
+// Build the spawn call. `shell: true` is NEVER used: a shell flattens argv into
+// a single command line, so an argument containing a space (an --output
+// directory) is re-split and a shell metacharacter in a path or container name
+// is interpreted. Windows batch shims cannot be spawned directly (Node refuses
+// since the CVE-2024-27980 fix), so those alone go through cmd.exe with a
+// pre-quoted, verbatim command line. Pure so the invariant is unit-testable.
+export function buildSpindbSpawn(options: {
+  command: string
+  args: string[]
+  platform?: NodeJS.Platform
+  comSpec?: string
+}): SpindbSpawn {
+  const {
+    command,
+    args,
+    platform = process.platform,
+    comSpec = process.env.ComSpec ?? 'cmd.exe',
+  } = options
+  if (platform !== 'win32' || !WINDOWS_BATCH_FILE.test(command)) {
+    return { command, args, windowsVerbatimArguments: false }
+  }
+  const line = [command, ...args].map(quoteWindowsArgument).join(' ')
+  return {
+    command: comSpec,
+    args: ['/d', '/s', '/c', `"${line}"`],
+    windowsVerbatimArguments: true,
+  }
+}
+
+// cmd.exe keeps a double-quoted argument in one piece and does not interpret
+// metacharacters inside it, so every argument is wrapped and its embedded
+// quotes and trailing backslashes escaped. (cmd still expands %VAR% inside
+// quotes; nothing we pass to spindb is user-supplied Windows env syntax.)
+function quoteWindowsArgument(value: string): string {
+  const escaped = value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, '$1$1')
+  return `"${escaped}"`
 }
 
 type SpawnOptions = {
@@ -50,11 +102,14 @@ function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
       process.removeListener('SIGINT', ignoreSigint)
       resolve(code)
     }
-    const child = spawn(command, [...baseArgs, ...args], {
+    const invocation = buildSpindbSpawn({
+      command,
+      args: [...baseArgs, ...args],
+    })
+    const child = spawn(invocation.command, invocation.args, {
       stdio: opts.quiet ? 'ignore' : 'inherit',
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
-      // Windows needs a shell to resolve `spindb.cmd` / the package runner.
-      shell: process.platform === 'win32',
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     })
     child.on('error', (error) => {
       if (!opts.quiet) {
@@ -90,9 +145,13 @@ export function captureSpindb(args: string[]): Promise<{
 }> {
   const { command, baseArgs } = spindbInvocation()
   return new Promise((resolve) => {
-    const child = spawn(command, [...baseArgs, ...args], {
+    const invocation = buildSpindbSpawn({
+      command,
+      args: [...baseArgs, ...args],
+    })
+    const child = spawn(invocation.command, invocation.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     })
     let stdout = ''
     let stderr = ''
