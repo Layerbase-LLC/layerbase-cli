@@ -6,7 +6,7 @@ import {
   resolveDatabaseId,
   uploadToPresignedUrl,
 } from '@/lib/cloud-api'
-import type { CloudDatabase } from '@/lib/cloud-api'
+import type { CloudDatabase, ImportFromR2Result } from '@/lib/cloud-api'
 import { confirm } from '@/lib/confirm'
 import { reportError, writeJson } from '@/lib/cli-output'
 import type { CommandFlags } from '@/ui/app'
@@ -15,7 +15,7 @@ import type { CommandFlags } from '@/ui/app'
 // returns the authoritative maxBytes from the presign call.
 const LARGE_FILE_WARN_BYTES = 50 * 1024 * 1024
 
-function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB', 'TB']
   let value = bytes / 1024
@@ -25,6 +25,32 @@ function formatBytes(bytes: number): string {
     unit += 1
   }
   return `${value.toFixed(1)} ${units[unit]}`
+}
+
+// The shipped import path, factored out so `promote` restores through EXACTLY
+// the same presign -> PUT -> restore sequence as `layerbase import` instead of
+// growing a second one. The caller owns validation, confirmation, and output;
+// `onProgress` is how it renders the two long steps.
+export async function uploadAndImport(options: {
+  filePath: string
+  size: number
+  targetId: string
+  onProgress?: (message: string) => void
+}): Promise<ImportFromR2Result> {
+  const { filePath, size, targetId, onProgress } = options
+
+  const presign = await presignImport(targetId)
+  if (size > presign.maxBytes) {
+    throw new Error(
+      `File too large: ${formatBytes(size)}. Maximum import size is ${formatBytes(presign.maxBytes)}.`,
+    )
+  }
+
+  onProgress?.('Uploading dump...')
+  await uploadToPresignedUrl(presign.uploadUrl, readFileSync(filePath))
+
+  onProgress?.('Restoring...')
+  return importFromR2({ targetId, r2Key: presign.r2Key })
 }
 
 // `layerbase import <dumpfile> --target <db-id-or-name> [--yes] [--json]`
@@ -99,19 +125,14 @@ export async function runImport(options: {
     }
 
     // 3. Presign, size-check against the authoritative cloud cap, upload, import.
-    const presign = await presignImport(targetId)
-    if (size > presign.maxBytes) {
-      process.stderr.write(
-        `File too large: ${formatBytes(size)}. Maximum import size is ${formatBytes(presign.maxBytes)}.\n`,
-      )
-      return 1
-    }
-
-    if (!json) process.stdout.write('Uploading dump...\n')
-    await uploadToPresignedUrl(presign.uploadUrl, readFileSync(filePath))
-
-    if (!json) process.stdout.write('Restoring...\n')
-    const result = await importFromR2({ targetId, r2Key: presign.r2Key })
+    const result = await uploadAndImport({
+      filePath,
+      size,
+      targetId,
+      onProgress: json
+        ? undefined
+        : (message) => process.stdout.write(`${message}\n`),
+    })
 
     if (json) {
       writeJson({ ok: true, ...result })

@@ -20,6 +20,7 @@ import { runBranch } from '@/commands/cloud-branch'
 import { runAgentInit } from '@/commands/agent-init'
 import { runMigrate } from '@/commands/migrate'
 import { runImport } from '@/commands/import'
+import { runPromote } from '@/commands/promote'
 import type { CommandFlags } from '@/ui/app'
 
 const VERSION = getVersion()
@@ -44,6 +45,7 @@ const UNIFIED_HELP = `
     cloud clone <db> [name]       Clone a cloud database into local spindb
     cloud connection-string <db>  Print the connection string (reveals password)
     psql / mysql / redis-cli <db> Connect to a cloud database by engine
+    promote <file-or-container>   Put a local database in the cloud, data included
     migrate --source <s> --target <db>  Import an external database into a cloud DB
     import <dumpfile> --target <db>      Import a dump file into a cloud database
     agent init [--global]         Install the Layerbase skill for AI agents
@@ -64,6 +66,7 @@ const UNIFIED_HELP = `
     $ lbase                          # spindb's interactive menu
     $ lbase create my-db --engine sqlite
     $ lbase login
+    $ lbase promote ./app.db --write-env
     $ lbase cloud ls --json
     $ LAYERBASE_API_KEY=sk_... lbase cloud create ci-db --engine postgresql --ttl 2h
     $ lbase psql my-cloud-db
@@ -142,6 +145,53 @@ const IMPORT_HELP = `
   target database. Validates the file exists and is non-empty first and warns on
   very large files; the server enforces the hard size cap. --json prints a final
   { ok, message, database, engine, bytesUploaded } result.
+`
+
+const PROMOTE_HELP = `
+  layerbase promote - put a local database in the cloud, data included
+
+    layerbase promote <file-or-container> [--target pgsqlite] [--name <db>]
+                      [--from <kind>] [--write-env] [--yes] [--json]
+
+  It creates a NEW cloud database sized to the source, imports the data, and
+  prints the connection string. One command instead of create + dump + import.
+
+  Sources (detected from the argument, never guessed)
+    ./app.db, ./app.sqlite, ./app.sqlite3   SQLite file (verified by its header)
+    ./analytics.duckdb                      DuckDB file (verified by its header)
+    ./dump.sql                              Postgres-dialect SQL dump
+    my-local-pg                             a local spindb container, dumped
+                                            with spindb's own backup command
+    --from pglite ./dump.sql                a PGlite dump (see below)
+
+  Targets
+    SQLite sources land on the cloud SQLite engine (SQLite storage behind the
+    Postgres wire, so psql and every Postgres driver work). --target libsql is
+    accepted but refused for now: libSQL restores from a data-directory archive,
+    not from a SQLite file. DuckDB -> DuckDB, SQL dumps and PGlite -> PostgreSQL,
+    a spindb container -> the same engine in the cloud. Desktop-only engines
+    (MongoDB, CockroachDB, SurrealDB) are refused with the licensing reason and
+    the closest cloud alternative.
+
+  PGlite data directories
+    Not supported directly (that would ship several MB of WASM in every
+    install). Dump the directory first with @electric-sql/pglite-tools' pgDump
+    and promote the resulting .sql; promote prints the snippet if you point it
+    at a directory.
+
+  Flags
+    --name <db>    name the cloud database (default: the file or container name)
+    --target <t>   pgsqlite (default) or libsql, for SQLite sources
+    --from <kind>  force the source kind: pglite, sqlite, duckdb, sql, spindb
+    --write-env    rewrite DATABASE_URL in ./.env (opt-in, creates the file if
+                   missing, never touches other lines)
+    --yes (-y)     skip the confirmation prompt
+    --json         print one machine-readable result object
+
+  Needs a Layerbase API key (LAYERBASE_API_KEY, --api-key, or a browser login
+  that cached one). If the import fails after the database is created, promote
+  says so, leaves the empty database in place, and prints the exact retry and
+  delete commands rather than deleting anything itself.
 `
 
 function printHelp(): void {
@@ -296,9 +346,13 @@ const cli = meow(UNIFIED_HELP, {
     yes: { type: 'boolean', default: false, shortFlag: 'y' },
     force: { type: 'boolean', default: false },
     global: { type: 'boolean', default: false },
-    // migrate / import flags.
+    // migrate / import / promote flags.
     source: { type: 'string' },
     target: { type: 'string' },
+    // promote-only flags.
+    from: { type: 'string' },
+    name: { type: 'string' },
+    writeEnv: { type: 'boolean', default: false },
     sourceDb: { type: 'string' },
     connectionString: { type: 'string' },
     sourceKey: { type: 'string' },
@@ -363,6 +417,12 @@ if (command === 'help') {
     process.exit(0)
   }
   process.exit(await runImport({ args: rest, flags: cli.flags }))
+} else if (command === 'promote') {
+  if (wantsHelp(rest)) {
+    process.stdout.write(`${PROMOTE_HELP}\n`)
+    process.exit(0)
+  }
+  process.exit(await runPromote({ args: rest, flags: cli.flags }))
 } else if (command === 'cloud') {
   await runCloud(rest, cli.flags)
 } else if (EXEC_COMMANDS.has(command)) {
