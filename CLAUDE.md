@@ -55,9 +55,24 @@ is the only entry. Inside it, `/ls` `/connect` `/clone` keep their CLOUD meaning
 ## Cloud API
 
 `src/lib/cloud-api.ts` is the shared client. Every request sends a
-`layerbase-cli/<version>` User-Agent so CLI usage is attributable in server logs
-(vs the desktop app or dashboard) - keep it. Auth is a 30-day JWT via the
-browser loopback flow (`src/lib/browser-login.ts`), mirroring layerbase-desktop.
+`layerbase-cli/<version>` User-Agent, and the cloud's structured request logger
+records it as of the 2026-08-13 deploy, so CLI traffic is separable from the
+desktop app and the dashboard in the server logs - keep sending it. (Before that
+deploy the header was sent but dropped unread, so nothing older than 2026-08-13
+has User-Agent attribution to query.)
+
+Creates additionally carry an optional `source: { via, kind }` block, built by
+`buildCreateDatabaseBody` and stored cloud-side as `created_via` /
+`created_source_kind`: `{ via: 'promote', kind: <source kind> }` from
+`promote.ts`, `{ via: 'cli' }` from `cloud-write.ts`. **HARD PII RULE: `kind` is
+a bare slug ('sqlite', 'duckdb', 'sql-dump', 'spindb') and NEVER a filesystem
+path, a filename, or a local container name.** Both halves are checked against
+`/^[a-z0-9_-]{1,32}$/` before they are sent and dropped when they fail. It is
+metrics metadata only, fire and forget: an older cloud build ignores the key,
+and a create must never fail over provenance.
+
+Auth is a 30-day JWT via the browser loopback flow
+(`src/lib/browser-login.ts`), mirroring layerbase-desktop.
 
 ## Process
 

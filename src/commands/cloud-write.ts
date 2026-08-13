@@ -49,7 +49,15 @@ export async function runCreate(options: {
   }
 
   try {
-    const result = await createDatabase({ name, engine, ttlHours })
+    // Plain CLI create, so promote, `cloud create`, and the dashboard stay
+    // distinguishable in the cloud's provenance rollup. No kind: there is no
+    // local source here.
+    const result = await createDatabase({
+      name,
+      engine,
+      ttlHours,
+      source: { via: 'cli' },
+    })
     const expiresAt = expiresAtOf(result)
     const isTransient = result.transient === true || Boolean(expiresAt)
 

@@ -221,7 +221,15 @@ export async function runPromote(options: {
 
     // 4. Create the cloud database, then wait for it to be importable.
     say(`Creating cloud database "${name}" (${target.engine})...`)
-    const created = await createDatabase({ name, engine: target.engine })
+    // The source KIND only ('sqlite' | 'duckdb' | 'sql-dump' | 'spindb'), so
+    // graduated prototypes are countable. Never the path or the container name:
+    // those are the user's filesystem, not our metric. cloud-api sanitizes this
+    // again on the way out as a backstop.
+    const created = await createDatabase({
+      name,
+      engine: target.engine,
+      source: { via: 'promote', kind: source.kind },
+    })
 
     if (created.status !== 'running') {
       say('Waiting for the database to come up...')
