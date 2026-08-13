@@ -444,11 +444,33 @@ export type CreateDatabaseResult = {
   expires_at?: string | null
 }
 
-export async function createDatabase(options: {
+// Optional create provenance: which surface created the database (`via`) and,
+// for promote, WHAT KIND of local source it came from (`kind`). Metrics only -
+// the cloud stores it as created_via/created_source_kind and never reads it
+// back for a lifecycle, quota, or billing decision. Fire and forget: a cloud
+// build that predates the field ignores the extra key, and a create must never
+// fail over provenance, so nothing here throws.
+export type CreateSource = {
+  via: string
+  kind?: string
+}
+
+// Mirror of the cloud-side sanitizer (layerbase-cloud
+// src/api/databases/create.ts): a lowercase slug, at most 32 characters, no
+// separators. This is a HARD PII rule rather than tidiness - a filesystem path,
+// a filename, or a local container name must never leave the machine, and a
+// bare slug is structurally incapable of carrying one.
+const SOURCE_TOKEN_PATTERN = /^[a-z0-9_-]{1,32}$/
+
+// Pure so the exact wire shape is unit-testable without a network call. An
+// unusable `via` drops the whole block (a kind with no via is orphan metadata
+// the cloud would discard anyway); an unusable `kind` drops just the kind.
+export function buildCreateDatabaseBody(options: {
   name: string
   engine: string
   ttlHours?: number
-}): Promise<CreateDatabaseResult> {
+  source?: CreateSource
+}): Record<string, unknown> {
   const body: Record<string, unknown> = {
     engine: options.engine,
     name: options.name,
@@ -456,6 +478,24 @@ export async function createDatabase(options: {
   if (options.ttlHours != null) {
     body.ttlHours = options.ttlHours
   }
+  const via = options.source?.via
+  if (typeof via === 'string' && SOURCE_TOKEN_PATTERN.test(via)) {
+    const kind = options.source?.kind
+    body.source =
+      typeof kind === 'string' && SOURCE_TOKEN_PATTERN.test(kind)
+        ? { via, kind }
+        : { via }
+  }
+  return body
+}
+
+export async function createDatabase(options: {
+  name: string
+  engine: string
+  ttlHours?: number
+  source?: CreateSource
+}): Promise<CreateDatabaseResult> {
+  const body = buildCreateDatabaseBody(options)
   const response = await keyFetch('/v1/databases', {
     method: 'POST',
     body: JSON.stringify(body),

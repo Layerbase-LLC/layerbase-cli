@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildCreateDatabaseBody,
   pickApiKey,
   pickWebAppBaseUrl,
   exitCodeForStatus,
@@ -75,4 +76,102 @@ test('pickWebAppBaseUrl: falls back when nothing is configured', () => {
     'https://layerbase.com',
   )
   assert.equal(typeof pickWebAppBaseUrl({}), 'string')
+})
+
+// ─── Create body (provenance) ───────────────────────────────────────────────
+
+test('create body: no source key at all when none is supplied', () => {
+  const body = buildCreateDatabaseBody({ name: 'my-db', engine: 'postgresql' })
+  assert.deepEqual(body, { engine: 'postgresql', name: 'my-db' })
+  assert.equal('source' in body, false)
+})
+
+test('create body: ttlHours is still only present when set', () => {
+  assert.equal(
+    'ttlHours' in buildCreateDatabaseBody({ name: 'a', engine: 'postgresql' }),
+    false,
+  )
+  assert.equal(
+    buildCreateDatabaseBody({ name: 'a', engine: 'postgresql', ttlHours: 2 })
+      .ttlHours,
+    2,
+  )
+})
+
+test('create body: promote sends via and the source kind', () => {
+  const body = buildCreateDatabaseBody({
+    name: 'app',
+    engine: 'sqlite',
+    source: { via: 'promote', kind: 'sqlite' },
+  })
+  assert.deepEqual(body, {
+    engine: 'sqlite',
+    name: 'app',
+    source: { via: 'promote', kind: 'sqlite' },
+  })
+})
+
+test('create body: every promote source kind survives the sanitizer', () => {
+  for (const kind of ['sqlite', 'duckdb', 'sql-dump', 'spindb']) {
+    const body = buildCreateDatabaseBody({
+      name: 'app',
+      engine: 'postgresql',
+      source: { via: 'promote', kind },
+    })
+    assert.deepEqual(body.source, { via: 'promote', kind })
+  }
+})
+
+test('create body: a plain CLI create sends via with no kind', () => {
+  const body = buildCreateDatabaseBody({
+    name: 'app',
+    engine: 'postgresql',
+    source: { via: 'cli' },
+  })
+  assert.deepEqual(body.source, { via: 'cli' })
+})
+
+test('create body: an unusable kind is dropped, the via is kept', () => {
+  for (const kind of ['', 'SQLite', 'sql dump', 'x'.repeat(33)]) {
+    const body = buildCreateDatabaseBody({
+      name: 'app',
+      engine: 'postgresql',
+      source: { via: 'promote', kind },
+    })
+    assert.deepEqual(body.source, { via: 'promote' }, `kind: ${kind}`)
+  }
+})
+
+// The PII guard: a path or a local container name must be structurally
+// impossible to ship as a kind, whatever a future caller passes.
+test('create body: nothing path-like can travel as a source kind', () => {
+  const paths = [
+    '/Users/bob/dev/app.db',
+    './app.db',
+    '../data/analytics.duckdb',
+    '~/notes.sqlite',
+    'C:\\Users\\bob\\app.db',
+    'app.db',
+    'my-local-pg container',
+  ]
+  for (const kind of paths) {
+    const body = buildCreateDatabaseBody({
+      name: 'app',
+      engine: 'postgresql',
+      source: { via: 'promote', kind },
+    })
+    assert.deepEqual(body.source, { via: 'promote' }, `kind: ${kind}`)
+    assert.equal(JSON.stringify(body).includes(kind), false)
+  }
+})
+
+test('create body: an unusable via drops the whole source block', () => {
+  for (const via of ['', 'Promote', 'via with spaces', '/tmp/promote']) {
+    const body = buildCreateDatabaseBody({
+      name: 'app',
+      engine: 'postgresql',
+      source: { via, kind: 'sqlite' },
+    })
+    assert.equal('source' in body, false, `via: ${via}`)
+  }
 })

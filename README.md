@@ -162,6 +162,11 @@ database, the connection string, the dashboard URL, and the bytes uploaded.
 database is created, promote says the database exists and is empty and prints the
 exact retry and delete commands; it never deletes anything on your behalf.
 
+The create request records how the database was made: `promote` (with the kind
+of source it came from, one of `sqlite`, `duckdb`, `sql-dump`, `spindb`) or a
+plain `cli` create. That is the whole payload - your file paths, filenames, and
+local container names never leave your machine.
+
 ## Migrations and imports
 
 `lbase migrate` imports an external database **into an existing cloud database**,
