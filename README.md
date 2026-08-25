@@ -5,7 +5,8 @@
 
 The Layerbase CLI is **local-first**: it is a drop-in for
 [spindb](https://github.com/robertjbass/spindb) for local database work, plus a
-`cloud` layer for your managed **Layerbase cloud** account. Connect with native
+`cloud` layer for your managed [**Layerbase cloud**](https://layerbase.com)
+account. Connect with native
 clients, drop into spindb, and never paste a connection string into your shell
 history.
 
@@ -209,7 +210,8 @@ non-TTY run without `--yes` refuses and exits `1`.
 
 For CI pipelines and coding agents, authenticate with a personal API key instead
 of the browser flow. Create one in the dashboard at
-`https://layerbase.com/cloud/settings`, then either export it or save it:
+[layerbase.com/cloud/settings](https://layerbase.com/cloud/settings), then
+either export it or save it:
 
 ```bash
 export LAYERBASE_API_KEY=sk_...        # env var: no login step needed at all
@@ -350,4 +352,4 @@ command. See `CLAUDE.md` for the full contract.
 
 ## License
 
-ISC, Layerbase, LLC.
+ISC, [Layerbase, LLC](https://layerbase.com).
