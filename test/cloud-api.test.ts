@@ -86,6 +86,25 @@ test('create body: no source key at all when none is supplied', () => {
   assert.equal('source' in body, false)
 })
 
+test('create body: version travels when resolved and is omitted when not', () => {
+  // Omitting the key is what makes the cloud pick its own default, so an empty
+  // string must never be sent in its place: that fails create-time validation.
+  assert.equal(
+    buildCreateDatabaseBody({ name: 'a', engine: 'postgresql', version: '18' })
+      .version,
+    '18',
+  )
+  assert.equal(
+    'version' in buildCreateDatabaseBody({ name: 'a', engine: 'postgresql' }),
+    false,
+  )
+  assert.equal(
+    'version' in
+      buildCreateDatabaseBody({ name: 'a', engine: 'postgresql', version: '' }),
+    false,
+  )
+})
+
 test('create body: ttlHours is still only present when set', () => {
   assert.equal(
     'ttlHours' in buildCreateDatabaseBody({ name: 'a', engine: 'postgresql' }),

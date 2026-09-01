@@ -163,6 +163,29 @@ database, the connection string, the dashboard URL, and the bytes uploaded.
 database is created, promote says the database exists and is empty and prints the
 exact retry and delete commands; it never deletes anything on your behalf.
 
+**The cloud database runs your local version**, not whatever the cloud happens to
+default to. A spindb container reports the exact binary it installed (`18.6.0`),
+and the cloud offers the identifiers it will create (`18`, `11.4`, `3`,
+`19.0.0-beta.3`), so promote matches the local version against the engine's real
+offer list and names the result before it creates anything:
+
+```
+Local PostgreSQL 18.6.0 maps to cloud PostgreSQL 18: Layerbase Cloud names its
+versions by release line, so this is the same line at its current release.
+```
+
+When your version is no longer offered, promote says so and uses the newest
+stable version on offer (never a prerelease, unless you are running one
+yourself):
+
+```
+Local PostgreSQL 15.4 is no longer offered in cloud; creating PostgreSQL 18.
+Check your app against it before you switch over.
+```
+
+A source with no version of its own (a bare `.sqlite`/`.duckdb` file, a `.sql`
+dump) is left to the cloud default, silently, as before.
+
 The create request records how the database was made: `promote` (with the kind
 of source it came from, one of `sqlite`, `duckdb`, `sql-dump`, `spindb`) or a
 plain `cli` create. That is the whole payload - your file paths, filenames, and

@@ -410,6 +410,17 @@ function readHeader(path: string): Buffer | null {
   }
 }
 
+// The engine version the source is running, when it knows one. Only a spindb
+// container does: `spindb list --json` reports the exact binary it installed
+// ('18.6.0'). A bare .sqlite/.duckdb file or a .sql dump carries no version at
+// all, and promote leaves the cloud to pick its own default for those rather
+// than inventing one.
+export function sourceEngineVersion(source: PromoteSource): string | undefined {
+  if (source.kind !== 'spindb') return undefined
+  const version = source.instance.version?.trim()
+  return version ? version : undefined
+}
+
 export function describeSource(source: PromoteSource): string {
   return source.kind === 'spindb'
     ? `spindb container "${source.instance.name}" (${source.instance.engine})`
