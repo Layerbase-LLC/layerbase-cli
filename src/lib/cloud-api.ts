@@ -468,12 +468,18 @@ const SOURCE_TOKEN_PATTERN = /^[a-z0-9_-]{1,32}$/
 export function buildCreateDatabaseBody(options: {
   name: string
   engine: string
+  version?: string
   ttlHours?: number
   source?: CreateSource
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     engine: options.engine,
     name: options.name,
+  }
+  // Omitted entirely when unknown, which is what makes the cloud pick its own
+  // default version. Never send an empty string: that fails validation.
+  if (options.version) {
+    body.version = options.version
   }
   if (options.ttlHours != null) {
     body.ttlHours = options.ttlHours
@@ -492,6 +498,7 @@ export function buildCreateDatabaseBody(options: {
 export async function createDatabase(options: {
   name: string
   engine: string
+  version?: string
   ttlHours?: number
   source?: CreateSource
 }): Promise<CreateDatabaseResult> {
@@ -501,6 +508,34 @@ export async function createDatabase(options: {
     body: JSON.stringify(body),
   })
   return (await response.json()) as CreateDatabaseResult
+}
+
+// One entry of the cloud engine catalog (GET /v1/engines). Only the fields the
+// CLI reads are typed; the endpoint returns the full engine registry.
+export type CloudEngineInfo = {
+  id: string
+  name: string
+  status: string
+  hostedServiceAllowed: boolean
+  defaultVersion?: string
+  supportedVersions?: string[]
+}
+
+// GET /v1/engines - the cloud's public engine registry (no auth, by design:
+// the web app's own codegen reads it). Always the cloud host, never the web
+// app base: cloud.layerbase.dev serves /v1, layerbase.com does not.
+export async function listEngines(): Promise<CloudEngineInfo[]> {
+  const response = await fetch(new URL('/v1/engines', cloudApiBaseUrl()), {
+    headers: { 'user-agent': USER_AGENT },
+  })
+  if (!response.ok) {
+    throw new CloudApiError({
+      status: response.status,
+      message: `Could not read the cloud engine catalog (HTTP ${response.status}).`,
+    })
+  }
+  const data: unknown = await response.json()
+  return Array.isArray(data) ? (data as CloudEngineInfo[]) : []
 }
 
 export async function destroyDatabase(id: string): Promise<void> {
