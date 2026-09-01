@@ -180,24 +180,43 @@ JSON output. Run `lbase migrate --help` for the full per-source flag list.
 lbase migrate --source postgres --target my-db \
   --connection-string "postgresql://user:pass@host:5432/db" --yes
 
+lbase migrate --source heroku   --target my-db \
+  --connection-string "$(heroku config:get DATABASE_URL -a your-app)" --yes
+
 # API-key sources (we discover the account, then you pick a database):
 lbase migrate --source neon    --target my-db --source-key napi_... --yes
 lbase migrate --source algolia --target my-search --source-key <admin-key> --app-id <app-id> --yes
 lbase migrate --source turso   --target my-libsql --source-key <token> --url libsql://... --yes
+lbase migrate --source cloudflare-d1 --target my-libsql \
+  --source-key <api-token> --account-id <account-id> --yes
 
 # Whole-database dump import:
 lbase import ./backup.dump --target my-db --yes
 ```
 
-Sources: `neon`, `supabase`, `render`, `railway`, `postgres`, `mysql`,
-`mariadb`, `planetscale`, `upstash`, `vercel-kv`, `redis`, `valkey`, `algolia`
-(to Meilisearch), `turso` (to libSQL). Connection-string sources
-(`postgres`/`mysql`/`mariadb`/`redis`/`valkey`/`vercel-kv`) take
-`--connection-string` (alias `--url`). API-key sources take `--source-key` (alias
-`--token`) plus, where needed, `--source-id` (aliases `--app-id`, `--email`,
-`--token-id`, `--url` for a Turso database URL) and `--source-secret` (alias
-`--db-password`, Supabase only). When multiple source databases are discovered,
-pick one with `--source-db <label-or-number>` (or interactively on a TTY).
+Connection-string sources (paste one URL with `--connection-string`, alias
+`--url`): `postgres`, `mysql`, `mariadb`, `redis`, `valkey`, `vercel-kv`,
+`netlify`, `replit`, `heroku`, `digitalocean`, `fly`, `aiven`,
+`crunchy-bridge`, `mongodb-atlas` (to FerretDB).
+
+API-key sources (we list the account's databases, then you pick one): `neon`,
+`supabase`, `render`, `railway`, `planetscale`, `upstash`, `algolia` (to
+Meilisearch), `turso` and `cloudflare-d1` (to libSQL). They take `--source-key`
+(alias `--token`) plus, where needed, `--source-id` (aliases `--app-id`,
+`--email`, `--token-id`, `--account-id`, and `--url` for a Turso database URL)
+and `--source-secret` (alias `--db-password`, Supabase only). When multiple
+source databases are discovered, pick one with `--source-db <label-or-number>`
+(or interactively on a TTY).
+
+A few sources have a trap worth knowing before you start. `replit` and `heroku`
+each cover two products: paste the Postgres string for a Postgres target, or
+`REPLIT_DB_URL` / `REDIS_URL` for a key-value target (land a Heroku Key-Value
+Store on Valkey, not Redis). A `fly` Managed Postgres cluster is only reachable
+through your own MPG proxy app with `?sslmode=disable`, or by pushing with
+`pg_dump` from inside Fly; see
+[layerbase.com/migrate/fly](https://layerbase.com/migrate/fly). And a MySQL 8
+source on the default `caching_sha2_password` auth cannot be read by the MariaDB
+dump tools, so use `--source mysql` for those rather than `--source mariadb`.
 
 `--json` on `migrate` prints **one** final result object (no interim progress
 lines): `{ ok, runId, status, databaseId, report }` on success or
