@@ -2,12 +2,14 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
+  CloudApiError,
   createDatabase,
   getConnectionInfo,
   listDatabases,
+  listEngines,
   webAppBaseUrl,
 } from '@/lib/cloud-api'
-import type { CreateDatabaseResult } from '@/lib/cloud-api'
+import type { CreateDatabaseResult, CreateSource } from '@/lib/cloud-api'
 import { captureSpindb, parseLastJson } from '@/lib/run-spindb'
 import { confirm, decideConfirmation } from '@/lib/confirm'
 import { reportError, writeJson } from '@/lib/cli-output'
@@ -20,8 +22,17 @@ import {
   mapTargetEngine,
   parseSqliteTarget,
   probePath,
+  sourceEngineVersion,
 } from '@/lib/promote-source'
 import type { SpindbInstance } from '@/lib/promote-source'
+import {
+  creatableVersions,
+  isUnsupportedVersionMessage,
+  parseSupportedVersionsFromError,
+  promoteVersionLine,
+  resolvePromoteVersion,
+  versionMajor,
+} from '@/lib/engine-versions'
 import type { CommandFlags } from '@/ui/app'
 
 // Free-tier posture of a promoted database (plan decision: promoted databases
@@ -87,6 +98,114 @@ async function backupSpindbInstance(options: {
     )
   }
   return path
+}
+
+// What version the new cloud database should run, worked out BEFORE it is
+// created so the user reads it in the same breath as the confirmation.
+type VersionPlan = {
+  // The identifier to send. Undefined leaves the choice to the cloud, which is
+  // what promote did unconditionally before this existed.
+  version?: string
+  // The one line to print before creating, when the cloud version is not the
+  // local one.
+  line?: string
+  // True when no offer list could be read for this engine. The create then
+  // falls back to the cloud default and promote reports what it actually got
+  // rather than pretending it chose.
+  unresolved: boolean
+  // The catalog's display name for the engine ('PostgreSQL'), or the slug.
+  engineLabel: string
+}
+
+// Resolve the local version against what the cloud will actually create.
+//
+// Best-effort by design, and this is where the CLI parts company with the
+// desktop app: the desktop stops the promote on an unreadable catalog because
+// it can show the user a dialog, while a promote that works today must not
+// start failing here over a catalog request. An unreadable catalog sends no
+// version (the pre-existing behavior) and is reported after the create.
+async function planCloudVersion(options: {
+  engine: string
+  localVersion?: string
+}): Promise<VersionPlan> {
+  const { engine, localVersion } = options
+  // A source with no version of its own (a bare .sqlite/.duckdb file, a SQL
+  // dump) has nothing to resolve: keep the cloud default and stay quiet.
+  if (!localVersion) return { unresolved: false, engineLabel: engine }
+
+  let entry
+  try {
+    const engines = await listEngines()
+    entry = engines.find(
+      (candidate) =>
+        candidate.id === engine &&
+        candidate.status === 'supported' &&
+        candidate.hostedServiceAllowed,
+    )
+  } catch {
+    return { unresolved: true, engineLabel: engine }
+  }
+
+  const engineLabel = entry?.name || engine
+  const supportedVersions = entry?.supportedVersions ?? []
+  if (supportedVersions.length === 0) {
+    return { unresolved: true, engineLabel }
+  }
+
+  const resolution = resolvePromoteVersion({
+    localVersion,
+    offeredVersions: creatableVersions({ engine, supportedVersions }),
+  })
+  if (!resolution) return { unresolved: true, engineLabel }
+
+  return {
+    version: resolution.version,
+    line: promoteVersionLine({ resolution, engineLabel }) ?? undefined,
+    unresolved: false,
+    engineLabel,
+  }
+}
+
+// Create the database, and heal the one failure the version can cause.
+//
+// The sunset list in engine-versions.ts is a mirror of a cloud-side gate that
+// /v1/engines does not publish, so it can drift. When it has, the cloud names
+// the versions it WILL create in its own rejection: re-resolve against that
+// list and retry once. Nothing was created by the rejected call, so the retry
+// is a plain create, not a cleanup.
+async function createWithVersion(options: {
+  name: string
+  engine: string
+  version?: string
+  localVersion?: string
+  engineLabel: string
+  source: CreateSource
+  say: (message: string) => void
+}): Promise<CreateDatabaseResult> {
+  const { name, engine, version, localVersion, engineLabel, source, say } =
+    options
+  try {
+    return await createDatabase({ name, engine, version, source })
+  } catch (error) {
+    if (
+      !version ||
+      !(error instanceof CloudApiError) ||
+      !isUnsupportedVersionMessage(error.message)
+    ) {
+      throw error
+    }
+    const offeredVersions = parseSupportedVersionsFromError(error.message)
+    const retry = offeredVersions
+      ? resolvePromoteVersion({ localVersion, offeredVersions })
+      : undefined
+    say(
+      `Cloud does not create ${engineLabel} ${version} any more; creating ` +
+        (retry
+          ? `${engineLabel} ${retry.version} instead.`
+          : `the default ${engineLabel} version instead.`),
+    )
+    return createDatabase({ name, engine, version: retry?.version, source })
+  }
 }
 
 async function waitForRunning(id: string): Promise<string> {
@@ -219,17 +338,47 @@ export async function runPromote(options: {
       throw new Error(`Nothing to promote: ${dumpPath} is empty.`)
     }
 
-    // 4. Create the cloud database, then wait for it to be importable.
+    // 4. Work out which version the cloud will run, then create the database
+    // and wait for it to be importable. The version is resolved against the
+    // cloud's own offer list rather than sent raw or left blank: a local
+    // PostgreSQL 15 container silently landing on 18 is the behavior this
+    // replaces.
+    const localVersion = sourceEngineVersion(source)
+    const plan = await planCloudVersion({
+      engine: target.engine,
+      localVersion,
+    })
+    if (plan.line) say(plan.line)
+
     say(`Creating cloud database "${name}" (${target.engine})...`)
     // The source KIND only ('sqlite' | 'duckdb' | 'sql-dump' | 'spindb'), so
     // graduated prototypes are countable. Never the path or the container name:
     // those are the user's filesystem, not our metric. cloud-api sanitizes this
     // again on the way out as a backstop.
-    const created = await createDatabase({
+    const created = await createWithVersion({
       name,
       engine: target.engine,
+      version: plan.version,
+      localVersion,
+      engineLabel: plan.engineLabel,
       source: { via: 'promote', kind: source.kind },
+      say,
     })
+
+    // No offer list was readable, so the cloud picked the version. Say which
+    // one it picked when it is not the local major, instead of leaving the user
+    // to discover a major upgrade on their own.
+    if (
+      plan.unresolved &&
+      localVersion &&
+      created.version &&
+      versionMajor(created.version) !== versionMajor(localVersion)
+    ) {
+      say(
+        `Note: local ${plan.engineLabel} ${localVersion} promoted into cloud ` +
+          `${plan.engineLabel} ${created.version}.`,
+      )
+    }
 
     if (created.status !== 'running') {
       say('Waiting for the database to come up...')
@@ -306,6 +455,7 @@ export async function runPromote(options: {
             id: created.id,
             name: created.name,
             engine: created.engine,
+            version: created.version,
             status: 'running',
           },
           connectionString,

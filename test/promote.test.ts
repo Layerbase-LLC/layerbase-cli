@@ -11,6 +11,7 @@ import {
   mapTargetEngine,
   parseSqliteTarget,
   sanitizeDatabaseName,
+  sourceEngineVersion,
 } from '@/lib/promote-source'
 import type { FileProbe, SpindbInstance } from '@/lib/promote-source'
 
@@ -329,6 +330,45 @@ test('name: sanitizes to a safe slug and never returns an empty name', () => {
   assert.equal(sanitizeDatabaseName('9lives'), 'db-9lives')
   assert.equal(sanitizeDatabaseName('a'.repeat(80)).length, 40)
   assert.equal(sanitizeDatabaseName('My App!!'), 'my-app')
+})
+
+// ─── Source version ─────────────────────────────────────────────────────────
+
+test('version: a spindb container carries the version it is running', () => {
+  assert.equal(
+    sourceEngineVersion({
+      kind: 'spindb',
+      instance: INSTANCES[0] as SpindbInstance,
+    }),
+    '17.7.0',
+  )
+})
+
+test('version: a file source has none, and neither does a versionless container', () => {
+  // Nothing to resolve against the cloud catalog, so promote keeps the cloud
+  // default and stays quiet about it.
+  assert.equal(
+    sourceEngineVersion({ kind: 'sqlite', path: './app.db' }),
+    undefined,
+  )
+  assert.equal(
+    sourceEngineVersion({ kind: 'sql-dump', path: './dump.sql' }),
+    undefined,
+  )
+  assert.equal(
+    sourceEngineVersion({
+      kind: 'spindb',
+      instance: { name: 'cache', engine: 'redis' },
+    }),
+    undefined,
+  )
+  assert.equal(
+    sourceEngineVersion({
+      kind: 'spindb',
+      instance: { name: 'blank', engine: 'redis', version: '  ' },
+    }),
+    undefined,
+  )
 })
 
 // ─── Confirmation ───────────────────────────────────────────────────────────
