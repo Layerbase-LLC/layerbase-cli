@@ -83,6 +83,7 @@ async function resolveCredentials(options: {
       flags.appId ??
       flags.email ??
       flags.tokenId ??
+      flags.accountId ??
       flags.url ??
       ''
     if (!value && interactive) value = await promptLine(req.sourceId.label)

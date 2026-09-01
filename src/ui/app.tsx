@@ -34,6 +34,7 @@ export type CommandFlags = {
   appId?: string
   email?: string
   tokenId?: string
+  accountId?: string
   token?: string
   url?: string
   dbPassword?: string

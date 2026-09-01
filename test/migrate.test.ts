@@ -4,30 +4,49 @@ import {
   MIGRATION_CATALOG,
   catalogSourceIds,
   getCatalogSource,
+  type MigrateEngine,
 } from '@/lib/migration-catalog'
 import { redactSecrets } from '@/lib/redact'
 
 // ─── Catalog integrity ──────────────────────────────────────────────────────
 
+// Mirror of the web MIGRATION_SOURCES ids (lib/cloud/migration-sources.ts),
+// with the one deliberate rename: the web's generic `other` Postgres source is
+// `postgres` here. When the web catalog gains a source, add it in both places.
+const EXPECTED_SOURCE_IDS = [
+  'neon',
+  'netlify',
+  'supabase',
+  'render',
+  'railway',
+  'replit',
+  'heroku',
+  'digitalocean',
+  'fly',
+  'postgres',
+  'mysql',
+  'mariadb',
+  'planetscale',
+  'upstash',
+  'vercel-kv',
+  'redis',
+  'valkey',
+  'algolia',
+  'turso',
+  'cloudflare-d1',
+  'mongodb-atlas',
+  'aiven',
+  'crunchy-bridge',
+]
+
 test('catalog: exposes every documented source id', () => {
   const ids = catalogSourceIds()
-  const expected = [
-    'neon',
-    'supabase',
-    'render',
-    'railway',
-    'postgres',
-    'mysql',
-    'mariadb',
-    'planetscale',
-    'upstash',
-    'vercel-kv',
-    'redis',
-    'valkey',
-    'algolia',
-    'turso',
-  ]
-  assert.deepEqual([...ids].sort(), [...expected].sort())
+  assert.deepEqual([...ids].sort(), [...EXPECTED_SOURCE_IDS].sort())
+})
+
+test('catalog: source ids are unique', () => {
+  const ids = catalogSourceIds()
+  assert.equal(new Set(ids).size, ids.length)
 })
 
 test('catalog: api-key sources declare a provider and a source key', () => {
@@ -67,7 +86,13 @@ test('catalog: known credential shapes match the cloud contract', () => {
   assert.ok(getCatalogSource('supabase')?.credentials.sourceSecret)
   assert.equal(getCatalogSource('neon')?.credentials.sourceSecret, undefined)
   // Two-part-key sources carry a sourceId (apiKeyId).
-  for (const id of ['planetscale', 'upstash', 'algolia', 'turso']) {
+  for (const id of [
+    'planetscale',
+    'upstash',
+    'algolia',
+    'turso',
+    'cloudflare-d1',
+  ]) {
     assert.ok(
       getCatalogSource(id)?.credentials.sourceId,
       `${id} needs a sourceId credential`,
@@ -79,14 +104,116 @@ test('catalog: known credential shapes match the cloud contract', () => {
   }
 })
 
+test('catalog: api-key providers match the cloud registry ids', () => {
+  const cloudProviderIds = new Set([
+    'neon',
+    'upstash',
+    'supabase',
+    'render',
+    'railway',
+    'planetscale',
+    'algolia',
+    'turso',
+    'cloudflare-d1',
+  ])
+  for (const source of MIGRATION_CATALOG) {
+    if (source.kind !== 'api-key') continue
+    assert.ok(
+      cloudProviderIds.has(source.provider ?? ''),
+      `${source.id} sends provider "${source.provider}", which the cloud does not know`,
+    )
+  }
+})
+
 test('catalog: every source has at least one target engine', () => {
   for (const source of MIGRATION_CATALOG) {
     assert.ok(source.targetEngines.length > 0, `${source.id} needs a target`)
   }
 })
 
+test('catalog: target engines stay inside the supported set', () => {
+  const engines: MigrateEngine[] = [
+    'postgresql',
+    'mysql',
+    'mariadb',
+    'redis',
+    'valkey',
+    'meilisearch',
+    'libsql',
+    'ferretdb',
+  ]
+  const known = new Set<string>(engines)
+  for (const source of MIGRATION_CATALOG) {
+    for (const engine of source.targetEngines) {
+      assert.ok(known.has(engine), `${source.id} targets unknown ${engine}`)
+    }
+    assert.equal(
+      new Set(source.targetEngines).size,
+      source.targetEngines.length,
+      `${source.id} repeats a target engine`,
+    )
+  }
+})
+
+test('catalog: every source has a non-empty hint', () => {
+  for (const source of MIGRATION_CATALOG) {
+    assert.ok(source.hint.trim().length > 0, `${source.id} needs a hint`)
+  }
+})
+
+test('catalog: the 2026-09-01 batch is connection-string only', () => {
+  // Every source added in the September batch pastes a URL. None has a cloud
+  // discovery adapter, so none may send a provider id.
+  for (const id of [
+    'heroku',
+    'digitalocean',
+    'netlify',
+    'fly',
+    'aiven',
+    'crunchy-bridge',
+    'replit',
+    'mongodb-atlas',
+  ]) {
+    const source = getCatalogSource(id)
+    assert.equal(source?.kind, 'connection-string', `${id} is a paste source`)
+    assert.equal(source?.provider, undefined)
+  }
+})
+
+test('catalog: MongoDB sources land on FerretDB', () => {
+  assert.deepEqual(getCatalogSource('mongodb-atlas')?.targetEngines, [
+    'ferretdb',
+  ])
+  assert.ok(
+    getCatalogSource('digitalocean')?.targetEngines.includes('ferretdb'),
+    'DigitalOcean Managed MongoDB imports into FerretDB',
+  )
+})
+
+test('catalog: Aiven has no MariaDB target', () => {
+  // hostdb's mariadb-dump cannot authenticate against a caching_sha2_password
+  // source (the MySQL 8 default), so an Aiven service that copies cleanly into
+  // MySQL dies in the dump tool on MariaDB. Tracked as C-164 in layerbase-cloud.
+  const aiven = getCatalogSource('aiven')
+  assert.ok(aiven?.targetEngines.includes('mysql'))
+  assert.ok(!aiven?.targetEngines.includes('mariadb'))
+})
+
+test('catalog: dual-product sources carry both key-value targets', () => {
+  // Heroku Key-Value Store and ReplDB are separate products behind the same
+  // source id, so each source has to offer the key-value targets as well as
+  // Postgres or the CLI would refuse a legitimate import.
+  for (const id of ['heroku', 'replit']) {
+    const targets = getCatalogSource(id)?.targetEngines ?? []
+    for (const engine of ['postgresql', 'valkey', 'redis']) {
+      assert.ok(targets.includes(engine as MigrateEngine), `${id} -> ${engine}`)
+    }
+  }
+})
+
 test('catalog: getCatalogSource is undefined for an unknown id', () => {
   assert.equal(getCatalogSource('mongodb'), undefined)
+  assert.equal(getCatalogSource('other'), undefined)
 })
 
 // ─── Credential redaction ───────────────────────────────────────────────────

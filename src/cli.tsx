@@ -102,25 +102,34 @@ const MIGRATE_HELP = `
 
   Sources and their credential flags
     Connection-string sources (paste one URL with --connection-string, alias --url):
-      postgres    postgresql://user:password@host:5432/dbname
-      mysql       mysql://user:password@host:3306/dbname
-      mariadb     mysql://... (MariaDB is MySQL-compatible)
-      redis       redis:// or rediss://
-      valkey      redis:// or rediss://
-      vercel-kv   the KV_URL (rediss://) from your Vercel project
+      postgres       postgresql://user:password@host:5432/dbname
+      mysql          mysql://user:password@host:3306/dbname
+      mariadb        mysql://... (a caching_sha2_password MySQL 8 source needs --source mysql)
+      redis          redis:// or rediss://
+      valkey         redis://, rediss://, valkey:// or valkeys://
+      vercel-kv      the store's rediss:// endpoint (Vercel KV now lives on Upstash)
+      netlify        netlify database status --show-credentials --branch production
+      replit         the production postgresql:// string, or REPLIT_DB_URL for ReplDB
+      heroku         heroku config:get DATABASE_URL (or REDIS_URL) -a your-app
+      digitalocean   Connection details, Public network, format "Connection string"
+      fly            only through your own fly-mpg-proxy app, with ?sslmode=disable
+      aiven          the Service URI (postgres://, mysql:// or valkeys://)
+      crunchy-bridge the postgres-role URI, or cb uri <cluster>
+      mongodb-atlas  mongodb+srv://user:password@cluster.mongodb.net/mydb (to FerretDB)
 
     API-key sources (we discover the account, then you pick a database):
-      neon        --source-key <napi_...>
-      supabase    --source-key <sbp_...> --source-secret <db password>
-      render      --source-key <rnd_...>
-      railway     --source-key <token>
-      planetscale --source-key <service token> --source-id <service token id>
-      upstash     --source-key <mgmt api key> --source-id <account email>
-      algolia     --source-key <admin api key> --source-id <application id> (--app-id)
-      turso       --source-key <auth token> --source-id <libsql:// url> (--url)
+      neon           --source-key <napi_...>
+      supabase       --source-key <sbp_...> --source-secret <db password>
+      render         --source-key <rnd_...>
+      railway        --source-key <token>
+      planetscale    --source-key <service token> --source-id <service token id>
+      upstash        --source-key <mgmt api key> --source-id <account email>
+      algolia        --source-key <admin api key> --source-id <application id> (--app-id)
+      turso          --source-key <auth token> --source-id <libsql:// url> (--url)
+      cloudflare-d1  --source-key <api token, D1 Read> --source-id <account id> (--account-id)
 
-    Friendly aliases: --token = --source-key; --app-id / --email / --token-id / --url
-    fill --source-id; --db-password = --source-secret.
+    Friendly aliases: --token = --source-key; --app-id / --email / --token-id /
+    --account-id / --url fill --source-id; --db-password = --source-secret.
 
   Picking a source database
     --source-db <label-or-number>  choose among discovered databases in a non-TTY.
@@ -362,6 +371,7 @@ const cli = meow(UNIFIED_HELP, {
     appId: { type: 'string' },
     email: { type: 'string' },
     tokenId: { type: 'string' },
+    accountId: { type: 'string' },
     token: { type: 'string' },
     url: { type: 'string' },
     dbPassword: { type: 'string' },
