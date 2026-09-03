@@ -1,5 +1,5 @@
 import { CloudApiError, exitCodeForStatus } from '@/lib/cloud-api'
-import { redactConnectionUri, redactConnectionUris } from '@/lib/redact'
+import { redactConnectionUri, redactJsonSecrets } from '@/lib/redact'
 
 // Whether the user asked for secrets in the clear (`--show-secrets` / `--reveal`).
 // Set ONCE from cli.tsx right after the flags are parsed, before any command
@@ -51,9 +51,11 @@ export function reportError(error: unknown, json: boolean): number {
   return 1
 }
 
-// Every --json payload the CLI emits goes through here, and every one of them
-// is password-redacted unless --show-secrets was passed (issue #53).
+// Every --json payload carrying database credentials goes through here, and
+// every one of them is redacted unless --show-secrets was passed (issue #53):
+// the connection string, and the discrete `password` / `restToken` /
+// `psPassword` fields the cloud returns alongside it.
 export function writeJson(value: unknown): void {
-  const payload = revealSecrets ? value : redactConnectionUris(value)
+  const payload = revealSecrets ? value : redactJsonSecrets(value)
   process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
 }

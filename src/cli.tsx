@@ -58,6 +58,11 @@ const UNIFIED_HELP = `
     browser: calls go straight to the cloud API. "layerbase login --api-key
     <key>" saves it. Create a key at https://layerbase.com/cloud/settings.
 
+  Secrets
+    Connection strings and passwords print redacted (user:****@host). Pass
+    --show-secrets (alias --reveal) to print them in full. "cloud
+    connection-string" is the deliberate escape hatch and always prints in full.
+
   Notes
     bare = spindb, cloud = "lbase cloud <verb>"
     "lbase --help" / "--version" show this help / the layerbase version.
