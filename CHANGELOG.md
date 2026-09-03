@@ -2,7 +2,11 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
-## 1.6.0
+## 2.0.0
+
+A major version because the change below alters what `--json` returns: a script
+that read a password or connection string out of it stops working until it opts
+back in. Nothing else about the command surface changed.
 
 ### Changed (breaking for scripts that read a credential out of `--json`)
 
