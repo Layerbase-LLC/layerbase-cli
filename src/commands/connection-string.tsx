@@ -9,6 +9,12 @@ type State = { kind: 'loading' } | { kind: 'done' }
 // Opt-in escape hatch: prints the full connection string (with password) to
 // stdout for piping into an app. With --json it prints { connectionString }.
 // The secure path is `layerbase connect`.
+//
+// This is the ONE surface exempt from the default redaction added for issue
+// #53: the user typed the command whose entire contract is "hand me the
+// credential", and `printConnectionInfo` points them here for exactly that.
+// Everything else redacts, which is why this writes stdout directly instead of
+// going through writeJson - do not "tidy" it onto the shared writer.
 export function ConnectionString({
   dbRef,
   json,

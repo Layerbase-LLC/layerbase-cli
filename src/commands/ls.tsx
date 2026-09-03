@@ -3,7 +3,7 @@ import { Box, Text, useApp } from 'ink'
 import Spinner from 'ink-spinner'
 import { listDatabases } from '@/lib/cloud-api'
 import type { CloudDatabase } from '@/lib/cloud-api'
-import { reportError } from '@/lib/cli-output'
+import { reportError, writeJson } from '@/lib/cli-output'
 import { hasBranches, parentLabel, summaryLine } from '@/lib/database-list'
 
 type State =
@@ -55,7 +55,10 @@ export function List({ json }: { json: boolean }) {
       try {
         const databases = await listDatabases()
         if (json) {
-          process.stdout.write(`${JSON.stringify(databases, null, 2)}\n`)
+          // writeJson, not a raw stringify: the cloud list carries each
+          // database's connection string, password and all, and this is the
+          // output issue #53 was filed about.
+          writeJson(databases)
         }
         setState({ kind: 'ready', databases })
       } catch (error) {

@@ -94,12 +94,24 @@ These are the only verbs layerbase owns; everything else is spindb.
 `<db>` accepts a cloud database id or its name. Add `--print` to
 `cloud connect` to show the connection details instead of launching a client.
 
+**Connection strings print redacted.** Anywhere the CLI prints one - `cloud ls
+--json`, `cloud create`, `cloud branch`, `promote`, error messages - the
+password is replaced with `****` (`postgresql://shop:****@host:5432/shop`), so a
+transcript, a CI log or a support paste carries no working credential. Pass
+`--show-secrets` (alias `--reveal`) to print them in full. The same masking
+covers the discrete credential fields the API returns beside a connection
+string (`password`, `restToken`, `psPassword`). The one exception is
+`cloud connection-string` (alias `url`), the deliberate escape hatch for piping
+a credential into an app: it always prints in full.
+
 `cloud ls` lists databases **and their branches** in one table. When the account
 has branches, a `PARENT` column names each branch's parent database (`-` on a
 primary) and a footer splits the rows, because branches do not count toward your
 plan's database limit: never read the row count as your database count. In
 `--json`, a branch is any row with `parentId` set (`parentName` names its
-parent); rows are passed through from the API untouched.
+parent); rows are passed through from the API with the connection-string
+password and the discrete credential fields (`password`, `restToken`,
+`psPassword`) masked as `****` (`--show-secrets` keeps the real values).
 `lbase cloud` with no subcommand prints the cloud help. Cloud mutation commands
 (`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
@@ -280,7 +292,9 @@ env:
 steps:
   - run: npm i -g layerbase
   - run: |
-      DB=$(lbase cloud create "ci-$GITHUB_RUN_ID" --engine postgresql --ttl 2h --json)
+      # --show-secrets: without it connectionString comes back with the
+      # password masked (****) and is not connectable.
+      DB=$(lbase cloud create "ci-$GITHUB_RUN_ID" --engine postgresql --ttl 2h --json --show-secrets)
       echo "DATABASE_URL=$(echo "$DB" | jq -r .connectionString)" >> "$GITHUB_ENV"
   - run: npm test
   - if: always()
@@ -344,6 +358,9 @@ deleted on exit. The password is never an argv value.
 | MySQL / MariaDB | `--defaults-extra-file` (temp `0600` file), deleted on exit |
 | Redis / Valkey | `REDISCLI_AUTH` environment variable |
 | Other engines | `layerbase cloud connection-string` / `--print` |
+
+Everything the CLI PRINTS is redacted by default for the same reason: see
+[Connection strings print redacted](#cloud-account) above.
 
 Connecting requires the engine's native client (`psql`, `mysql`, `redis-cli`)
 on your `PATH`.

@@ -5,6 +5,7 @@ import { buildLaunchPlan } from '@/lib/engines'
 import { runClient } from '@/lib/launch'
 import { printConnectionInfo } from '@/lib/format'
 import type { CommandFlags } from '@/ui/app'
+import { forOutput } from '@/lib/cli-output'
 
 type ExecOptions = {
   command: string
@@ -30,7 +31,7 @@ export async function connectToDatabase(options: {
     info = await getConnectionInfo(dbRef)
   } catch (error) {
     spinner.unmount()
-    process.stderr.write(`${(error as Error).message}\n`)
+    process.stderr.write(`${forOutput((error as Error).message)}\n`)
     return 1
   }
   spinner.unmount()
@@ -44,7 +45,7 @@ export async function connectToDatabase(options: {
   try {
     plan = buildLaunchPlan({ info, command })
   } catch (error) {
-    process.stderr.write(`${(error as Error).message}\n`)
+    process.stderr.write(`${forOutput((error as Error).message)}\n`)
     return 1
   }
 
