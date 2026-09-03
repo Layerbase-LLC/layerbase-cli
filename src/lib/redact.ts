@@ -52,14 +52,19 @@ export const REDACTED_PASSWORD = '****'
 // of an unencoded `@` inside a password. Stopping at the first `@` instead
 // leaves the tail of such a password in the clear, which is the one case where
 // getting this wrong actually leaks.
-// The password class excludes the delimiters a connection string is USUALLY
-// found next to: whitespace, quotes, angle brackets and commas. Two URIs on one
-// comma-separated line would otherwise collapse into a single match, taking the
-// first host and the second scheme with them, and `+` (not `*`) means
-// `user:@host` - a URI with no password at all - is left alone instead of
-// getting a mask that claims a password exists.
+// The password class excludes whitespace, double quotes and angle brackets,
+// the delimiters a connection string is USUALLY found next to. Commas and
+// apostrophes are NOT excluded: a pasted source password may contain either,
+// and a class that refused them made the whole URI fail to match, which
+// printed it in the clear with no sign the redactor had skipped it. Instead the
+// password stops where a NEW `scheme://` begins right after a comma or
+// apostrophe, so two URIs on one comma-separated line still redact separately
+// instead of collapsing into a single match that takes the first host and the
+// second scheme with it. `+` (not `*`) means `user:@host` - a URI with no
+// password at all - is left alone instead of getting a mask that claims a
+// password exists.
 const URI_CREDENTIALS =
-  /([a-z][a-z0-9+.-]*:\/\/)([^:/?#@\s]*):([^\s"'<>,]+)@(?=[^\s@]*(?:[/?#]|\s|$))/gi
+  /([a-z][a-z0-9+.-]*:\/\/)([^:/?#@\s]*):((?:(?!(?<=[,'])[a-z][a-z0-9+.-]*:\/\/)[^\s"<>])+)@(?=[^\s@]*(?:[/?#]|\s|$))/gi
 // Query-string credentials. Not just `password`: a Redis REST endpoint carries
 // `?token=`, and several migrate sources take `?api_key=`.
 const QUERY_PASSWORD =

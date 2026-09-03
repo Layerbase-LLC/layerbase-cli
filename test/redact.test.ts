@@ -165,6 +165,38 @@ test('does not let two connection strings on one line collapse', () => {
     redactConnectionUri('postgresql://a:p1@h1:5432/d1 mysql://b:p2@h2:3306/d2'),
     'postgresql://a:****@h1:5432/d1 mysql://b:****@h2:3306/d2',
   )
+  // Quoted and comma-separated, the way a shell or a config file lists them.
+  assert.equal(
+    redactConnectionUri(
+      "'postgresql://a:p1@h1:5432/d1', 'mysql://b:p2@h2:3306/d2'",
+    ),
+    "'postgresql://a:****@h1:5432/d1', 'mysql://b:****@h2:3306/d2'",
+  )
+})
+
+test('redacts a password that contains a comma or an apostrophe', () => {
+  // A pasted source password can contain either. Excluding them from the
+  // password class made the URI fail to match at all, so it printed in the
+  // clear with nothing to show the redactor had skipped it.
+  assert.equal(
+    redactConnectionUri('postgresql://u:ab,cd@host:5432/db'),
+    'postgresql://u:****@host:5432/db',
+  )
+  assert.equal(
+    redactConnectionUri("mongodb://u:it's@host:27017/db"),
+    'mongodb://u:****@host:27017/db',
+  )
+  assert.equal(
+    redactConnectionUri("postgresql://u:a,b'c@host:5432/db"),
+    'postgresql://u:****@host:5432/db',
+  )
+  // Both at once: a comma password AND a second URI on the same line.
+  assert.equal(
+    redactConnectionUri(
+      'postgresql://a:p,1@h1:5432/d1,mysql://b:p2@h2:3306/d2',
+    ),
+    'postgresql://a:****@h1:5432/d1,mysql://b:****@h2:3306/d2',
+  )
 })
 
 test('redacts credentials carried as other query parameters', () => {

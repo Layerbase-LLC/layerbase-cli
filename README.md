@@ -98,7 +98,9 @@ These are the only verbs layerbase owns; everything else is spindb.
 --json`, `cloud create`, `cloud branch`, `promote`, error messages - the
 password is replaced with `****` (`postgresql://shop:****@host:5432/shop`), so a
 transcript, a CI log or a support paste carries no working credential. Pass
-`--show-secrets` (alias `--reveal`) to print them in full. The one exception is
+`--show-secrets` (alias `--reveal`) to print them in full. The same masking
+covers the discrete credential fields the API returns beside a connection
+string (`password`, `restToken`, `psPassword`). The one exception is
 `cloud connection-string` (alias `url`), the deliberate escape hatch for piping
 a credential into an app: it always prints in full.
 
@@ -107,8 +109,9 @@ has branches, a `PARENT` column names each branch's parent database (`-` on a
 primary) and a footer splits the rows, because branches do not count toward your
 plan's database limit: never read the row count as your database count. In
 `--json`, a branch is any row with `parentId` set (`parentName` names its
-parent); rows are passed through from the API with only the connection-string
-password redacted (`--show-secrets` to keep it).
+parent); rows are passed through from the API with the connection-string
+password and the discrete credential fields (`password`, `restToken`,
+`psPassword`) masked as `****` (`--show-secrets` keeps the real values).
 `lbase cloud` with no subcommand prints the cloud help. Cloud mutation commands
 (`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
