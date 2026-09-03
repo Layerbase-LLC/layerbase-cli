@@ -289,7 +289,9 @@ env:
 steps:
   - run: npm i -g layerbase
   - run: |
-      DB=$(lbase cloud create "ci-$GITHUB_RUN_ID" --engine postgresql --ttl 2h --json)
+      # --show-secrets: without it connectionString comes back with the
+      # password masked (****) and is not connectable.
+      DB=$(lbase cloud create "ci-$GITHUB_RUN_ID" --engine postgresql --ttl 2h --json --show-secrets)
       echo "DATABASE_URL=$(echo "$DB" | jq -r .connectionString)" >> "$GITHUB_ENV"
   - run: npm test
   - if: always()
