@@ -91,6 +91,12 @@ test('redacts a password passed as a query parameter', () => {
     redactConnectionUri('postgresql://host:5432/db?user=shop&password=s3cr3t'),
     'postgresql://host:5432/db?user=shop&password=****',
   )
+  // The value stops at the fragment marker: `#readonly` is not part of the
+  // password, and swallowing it would lose information for no safety gain.
+  assert.equal(
+    redactConnectionUri('postgresql://host:5432/db?password=s3cr3t#readonly'),
+    'postgresql://host:5432/db?password=****#readonly',
+  )
 })
 
 test('walks a --json payload at any depth', () => {

@@ -54,7 +54,7 @@ export const REDACTED_PASSWORD = '****'
 // getting this wrong actually leaks.
 const URI_CREDENTIALS =
   /([a-z][a-z0-9+.-]*:\/\/)([^:/?#@\s]*):([^\s]*)@(?=[^\s@]*(?:[/?#]|\s|$))/gi
-const QUERY_PASSWORD = /([?&](?:password|pwd)=)([^&\s"']+)/gi
+const QUERY_PASSWORD = /([?&](?:password|pwd)=)([^&#\s"']+)/gi
 
 export function redactConnectionUri(value: string): string {
   return value
