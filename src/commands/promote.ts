@@ -12,7 +12,7 @@ import {
 import type { CreateDatabaseResult, CreateSource } from '@/lib/cloud-api'
 import { captureSpindb, parseLastJson } from '@/lib/run-spindb'
 import { confirm, decideConfirmation } from '@/lib/confirm'
-import { reportError, writeJson } from '@/lib/cli-output'
+import { forOutput, reportError, writeJson } from '@/lib/cli-output'
 import { formatBytes, uploadAndImport } from '@/commands/import'
 import { writeEnvAssignment } from '@/lib/env-file'
 import {
@@ -470,7 +470,8 @@ export async function runPromote(options: {
         `\nPromoted ${describeSource(source)} into "${created.name}" ` +
           `(${formatBytes(imported.bytesUploaded)}).\n\n`,
       )
-      if (connectionString) process.stdout.write(`${connectionString}\n\n`)
+      if (connectionString)
+        process.stdout.write(`${forOutput(connectionString)}\n\n`)
       process.stdout.write(`Dashboard: ${url}\n`)
       process.stdout.write(`${WHAT_HAPPENS_NEXT}\n`)
       if (envAction) {

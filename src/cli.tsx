@@ -8,6 +8,7 @@ import { runSpindb } from '@/lib/run-spindb'
 import { registeredCommandNames } from '@/lib/commands'
 import { getVersion } from '@/lib/version'
 import { configureCloudAuth } from '@/lib/cloud-api'
+import { setRevealSecrets } from '@/lib/cli-output'
 import { runWhoami } from '@/commands/whoami-run'
 import { runKeyLogin } from '@/commands/key-login'
 import {
@@ -93,6 +94,10 @@ const CLOUD_HELP = `
 
   "<db>" accepts a cloud database id or its name. Set LAYERBASE_API_KEY (or pass
   --api-key) to run these headlessly with no browser login.
+
+  Connection strings print with the password redacted (user:****@host). Pass
+  --show-secrets (alias --reveal) to print them in full. "cloud
+  connection-string" is the deliberate escape hatch and always prints in full.
 `
 
 const MIGRATE_HELP = `
@@ -375,12 +380,20 @@ const cli = meow(UNIFIED_HELP, {
     token: { type: 'string' },
     url: { type: 'string' },
     dbPassword: { type: 'string' },
+    // Print connection strings with their password instead of the default
+    // `****` (issue #53). `--reveal` is the short alias.
+    showSecrets: { type: 'boolean', default: false },
+    reveal: { type: 'boolean', default: false },
   },
 })
 
 // The --api-key flag wins over LAYERBASE_API_KEY and the stored key, and
 // --api-url over the stored host. Set once before any cloud command runs.
 configureCloudAuth({ apiKey: cli.flags.apiKey, apiUrl: cli.flags.apiUrl })
+
+// Redaction is the default for everything printed from here on; this is the
+// single opt-out, set before any command runs (see lib/cli-output).
+setRevealSecrets(Boolean(cli.flags.showSecrets || cli.flags.reveal))
 
 const EXEC_COMMANDS = new Set(['psql', 'redis-cli', 'mysql'])
 
