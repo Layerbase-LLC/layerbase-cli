@@ -1,6 +1,7 @@
 import { getConnectionInfo } from '@/lib/cloud-api'
 import { buildConnectionString } from '@/lib/format'
 import { runSpindb, spindbExists } from '@/lib/run-spindb'
+import { forOutput } from '@/lib/cli-output'
 
 // spindb reads the remote connection string from this env var (--from-env), so
 // the password is never on argv / in shell history.
@@ -21,7 +22,7 @@ export async function runClone(options: {
   try {
     info = await getConnectionInfo(dbRef)
   } catch (error) {
-    process.stderr.write(`${(error as Error).message}\n`)
+    process.stderr.write(`${forOutput((error as Error).message)}\n`)
     return 1
   }
 
@@ -29,7 +30,7 @@ export async function runClone(options: {
   try {
     connectionString = buildConnectionString(info)
   } catch (error) {
-    process.stderr.write(`${(error as Error).message}\n`)
+    process.stderr.write(`${forOutput((error as Error).message)}\n`)
     return 1
   }
 

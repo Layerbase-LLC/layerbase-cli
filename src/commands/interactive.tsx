@@ -16,6 +16,7 @@ import { connectToDatabase } from '@/commands/connect'
 import { runClone } from '@/commands/clone'
 import { App } from '@/ui/app'
 import type { CommandFlags } from '@/ui/app'
+import { forOutput } from '@/lib/cli-output'
 
 const ACCENT_ANSI = '\x1b[38;2;124;156;255m'
 const DIM = '\x1b[2m'
@@ -97,7 +98,7 @@ async function selectDatabase(): Promise<string | null> {
     databases = await listDatabases()
   } catch (error) {
     spinner.unmount()
-    process.stderr.write(`${(error as Error).message}\n`)
+    process.stderr.write(`${forOutput((error as Error).message)}\n`)
     return null
   }
   spinner.unmount()

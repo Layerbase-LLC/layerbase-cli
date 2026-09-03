@@ -7,7 +7,7 @@ import {
 } from '@/lib/cloud-api'
 import type { BranchInfo } from '@/lib/cloud-api'
 import type { CommandFlags } from '@/ui/app'
-import { reportError, writeJson } from '@/lib/cli-output'
+import { forOutput, reportError, writeJson } from '@/lib/cli-output'
 
 const BRANCH_USAGE =
   'Usage:\n' +
@@ -19,7 +19,7 @@ const BRANCH_USAGE =
 function printBranch(branch: BranchInfo): void {
   process.stdout.write(`${branch.name} (${branch.status})\n`)
   if (branch.connectionString) {
-    process.stdout.write(`${branch.connectionString}\n`)
+    process.stdout.write(`${forOutput(branch.connectionString)}\n`)
   }
 }
 

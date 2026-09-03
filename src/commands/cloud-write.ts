@@ -7,7 +7,7 @@ import {
 } from '@/lib/cloud-api'
 import type { CommandFlags } from '@/ui/app'
 import { parseTtlToHours } from '@/lib/duration'
-import { reportError, writeJson } from '@/lib/cli-output'
+import { forOutput, reportError, writeJson } from '@/lib/cli-output'
 import { confirm } from '@/lib/confirm'
 
 function expiresAtOf(result: {
@@ -84,7 +84,7 @@ export async function runCreate(options: {
       process.stdout.write(`Expires: ${expiresAt}\n`)
     }
     if (result.connectionString) {
-      process.stdout.write(`\n${result.connectionString}\n`)
+      process.stdout.write(`\n${forOutput(result.connectionString)}\n`)
     }
     return 0
   } catch (error) {
@@ -113,7 +113,9 @@ export async function runDestroy(options: {
       )
       return 1
     }
-    const ok = await confirm(`Delete cloud database "${ref}"? This cannot be undone.`)
+    const ok = await confirm(
+      `Delete cloud database "${ref}"? This cannot be undone.`,
+    )
     if (!ok) {
       process.stdout.write('Aborted.\n')
       return 1
