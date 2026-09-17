@@ -90,6 +90,14 @@ type SpawnOptions = {
   quiet?: boolean
 }
 
+// spindb titles its interactive menu from SPINDB_BRAND (0.69.6+; older versions
+// ignore it), so a session entered through `layerbase` reads as Layerbase.
+export function spindbChildEnv(
+  extra: Record<string, string> = {},
+): NodeJS.ProcessEnv {
+  return { ...process.env, SPINDB_BRAND: 'Layerbase', ...extra }
+}
+
 function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
   const { command, baseArgs } = spindbInvocation()
   return new Promise<number>((resolve) => {
@@ -108,7 +116,7 @@ function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
     })
     const child = spawn(invocation.command, invocation.args, {
       stdio: opts.quiet ? 'ignore' : 'inherit',
-      env: opts.env ? { ...process.env, ...opts.env } : process.env,
+      env: spindbChildEnv(opts.env),
       windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     })
     child.on('error', (error) => {
