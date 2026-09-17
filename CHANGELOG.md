@@ -2,6 +2,16 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.0.1
+
+### Changed
+
+The local database menu opened through `layerbase` / `lbase` is now titled
+"Layerbase - Local Database Manager" instead of "SpinDB - Local Database
+Manager". The CLI sets `SPINDB_BRAND=Layerbase` for the spindb process it
+spawns; spindb 0.69.6 or newer reads it, and an older spindb ignores it and
+keeps its own title. Nothing else about the passthrough changed.
+
 ## 2.0.0
 
 A major version because the change below alters what `--json` returns: a script
