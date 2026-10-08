@@ -466,16 +466,22 @@ export async function getConnectionInfo(
   // also present. The ref is resolved to an id first: the route rejects names.
   const credentials = await loadCredentials()
   if (credentials?.token) {
-    const id = await resolveDatabaseId(dbRef)
-    const response = await rawFetch(
-      new URL(
-        `/api/cli/databases/${encodeURIComponent(id)}/connection-info`,
-        credentials.apiUrl,
-      ),
-      credentials.token,
-      'jwt',
-    )
-    return (await response.json()) as ConnectionInfo
+    try {
+      const id = await resolveDatabaseId(dbRef)
+      const response = await rawFetch(
+        new URL(
+          `/api/cli/databases/${encodeURIComponent(id)}/connection-info`,
+          credentials.apiUrl,
+        ),
+        credentials.token,
+        'jwt',
+      )
+      return (await response.json()) as ConnectionInfo
+    } catch (error) {
+      // Key mode still has the shared-host /v1 path. A stale browser login
+      // must not hide it. JWT mode has nothing else to try.
+      if (auth.mode === 'jwt') throw error
+    }
   }
   if (auth.mode === 'jwt') {
     throw new CloudApiError({

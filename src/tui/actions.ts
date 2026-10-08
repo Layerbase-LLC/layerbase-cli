@@ -64,15 +64,16 @@ function messageFrom(stdout: string, stderr: string, fallback: string): string {
   return pickErrorLine(stdout, stderr, fallback)
 }
 
-function looksLikePortFailure(message: string): boolean {
+// A bind check runs before start. This only catches a failure whose text names
+// the socket. Generic pg_ctl lines ("could not start server", "Examine the log
+// output.") also appear for a bad data directory, and those must not move the port.
+export function looksLikePortFailure(message: string): boolean {
   const text = message.toLowerCase()
   return (
     text.includes('address already in use') ||
     text.includes('could not bind') ||
     text.includes('eaddrinuse') ||
-    text.includes('could not start server') ||
-    text.includes('examine the log') ||
-    text.includes('pg_ctl start failed')
+    text.includes('could not create any tcp/ip sockets')
   )
 }
 

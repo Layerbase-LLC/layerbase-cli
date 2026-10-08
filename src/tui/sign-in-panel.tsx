@@ -27,6 +27,12 @@ export function SignInPanel(props: {
 }) {
   useInput(
     (input, key) => {
+      if (
+        (props.step === 'waiting' || props.step === 'saving') &&
+        input === 'q'
+      ) {
+        return
+      }
       if (input === 'q') {
         props.onQuit()
         return

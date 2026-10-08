@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pickErrorLine } from '@/tui/actions'
+import { looksLikePortFailure, pickErrorLine } from '@/tui/actions'
 import { missingEngineBinary } from '@/tui/binary'
 import { engineLabel } from '@/tui/engines'
 import {
@@ -176,6 +176,21 @@ test('a busy port moves to the next free one, and pg_ctl noise is dropped', () =
       'spindb start failed',
     ),
     /TCP\/IP sockets/,
+  )
+  assert.equal(
+    looksLikePortFailure(
+      'pg_ctl start failed with code 1: FATAL: could not create any TCP/IP sockets',
+    ),
+    true,
+  )
+  assert.equal(looksLikePortFailure('address already in use'), true)
+  assert.equal(looksLikePortFailure('pg_ctl: could not start server'), false)
+  assert.equal(looksLikePortFailure('Examine the log output.'), false)
+  assert.equal(
+    looksLikePortFailure(
+      'pg_ctl start failed with code 1: FATAL: data directory has wrong ownership',
+    ),
+    false,
   )
 })
 
