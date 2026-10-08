@@ -3,6 +3,7 @@ import { render } from 'ink'
 import { App } from '@/ui/app'
 import { runExec } from '@/commands/connect'
 import { runInteractive } from '@/commands/interactive'
+import { runTui } from '@/commands/tui'
 import { runClone } from '@/commands/clone'
 import { runSpindb } from '@/lib/run-spindb'
 import { registeredCommandNames } from '@/lib/commands'
@@ -52,6 +53,7 @@ const UNIFIED_HELP = `
     agent init [--global]         Install the Layerbase skill for AI agents
     alias                         Set up the short "lb" command
     chat                          Interactive console for your Layerbase account
+    tui                           Visual command center for local and cloud databases
 
   Headless auth (CI / agents)
     Set LAYERBASE_API_KEY (or pass --api-key) to run cloud commands with no
@@ -433,6 +435,13 @@ if (command === 'help') {
     process.exit(1)
   }
   await runInteractive(cli.flags)
+} else if (command === 'tui') {
+  if (!process.stdin.isTTY) {
+    process.stderr.write('layerbase tui needs an interactive terminal.\n')
+    process.exit(1)
+  }
+  await runTui()
+  process.exit(0)
 } else if (command === 'migrate') {
   if (wantsHelp(rest)) {
     process.stdout.write(`${MIGRATE_HELP}\n`)

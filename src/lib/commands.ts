@@ -76,6 +76,11 @@ export const COMMANDS: CommandSpec[] = [
     cliOnly: true,
   },
   {
+    name: 'tui',
+    summary: 'Visual command center for local and cloud databases',
+    cliOnly: true,
+  },
+  {
     name: 'cloud',
     summary:
       'Cloud database commands (ls, create, delete, start, stop, branch)',

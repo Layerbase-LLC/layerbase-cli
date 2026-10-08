@@ -232,19 +232,6 @@ async function rawFetch(
   return response
 }
 
-// For endpoints that exist in BOTH modes with the same response shape: pick the
-// /v1 path (key) or the /api/cli path (jwt) based on the resolved auth.
-async function dualFetch(
-  paths: { v1: string; jwt: string },
-  init?: RequestInit,
-): Promise<Response> {
-  const auth = await resolveAuth()
-  if (auth.mode === 'key') {
-    return rawFetch(new URL(paths.v1, auth.baseUrl), auth.apiKey, 'key', init)
-  }
-  return rawFetch(new URL(paths.jwt, auth.apiUrl), auth.token, 'jwt', init)
-}
-
 // For cloud /v1-only endpoints (all mutations + /v1/me): requires a key. Fails
 // with a clear, actionable message when only a browser JWT is available, since
 // the web proxy does not expose these.
@@ -284,6 +271,22 @@ export type CloudDatabase = {
   parentId?: string | null
   parentName?: string | null
   branchedAt?: string | null
+  // Placement of the box serving this database. Present on GET /v1/databases.
+  // The browser-token fan-out only includes serverPool once that route sends
+  // it. Anything else is ignored by the TUI.
+  server?: string | null
+  serverPool?: string | null
+  // Rich fields from GET /v1/databases. The browser-token fan-out may omit
+  // them. Connection strings stay off the TUI even when the payload has them.
+  created_at?: string | null
+  hostname?: string | null
+  host?: string | null
+  port?: number | null
+  storageClass?: string | null
+  memoryLimitMb?: number | null
+  environment?: string | null
+  lastActivityAt?: string | null
+  locked?: number | boolean | null
 }
 
 export type ConnectionInfo = {
@@ -374,13 +377,68 @@ export async function getMe(): Promise<MeResponse | null> {
   }
 }
 
-export async function listDatabases(): Promise<CloudDatabase[]> {
-  const response = await dualFetch({
-    v1: '/v1/databases',
-    jwt: '/api/cli/databases',
+async function fetchDatabaseList(
+  url: URL,
+  token: string,
+  mode: 'key' | 'jwt',
+): Promise<CloudDatabase[]> {
+  const response = await rawFetch(url, token, mode)
+  const data = (await response.json()) as { databases?: CloudDatabase[] }
+  return data.databases ?? []
+}
+
+// The key list is one box (the shared host). The browser-token list is the web
+// app's fan-out across every shared box plus the caller's dedicated boxes.
+// Overlay the key rows onto the fan-out so shared databases keep the richer
+// fields, and dedicated rows still appear. A key row the fan-out missed is
+// appended, so a partial fan-out cannot hide a database the key already saw.
+export function mergeDatabaseLists(
+  fanout: CloudDatabase[],
+  detailed: CloudDatabase[],
+): CloudDatabase[] {
+  const detailById = new Map(detailed.map((row) => [row.id, row]))
+  const seen = new Set<string>()
+  const merged = fanout.map((row) => {
+    seen.add(row.id)
+    const detail = detailById.get(row.id)
+    return detail ? { ...row, ...detail } : row
   })
-  const data = (await response.json()) as { databases: CloudDatabase[] }
-  return data.databases
+  for (const row of detailed) {
+    if (!seen.has(row.id)) merged.push(row)
+  }
+  return merged
+}
+
+export async function listDatabases(): Promise<CloudDatabase[]> {
+  const auth = await resolveAuth()
+  if (auth.mode === 'jwt') {
+    return fetchDatabaseList(
+      new URL('/api/cli/databases', auth.apiUrl),
+      auth.token,
+      'jwt',
+    )
+  }
+
+  const shared = await fetchDatabaseList(
+    new URL('/v1/databases', auth.baseUrl),
+    auth.apiKey,
+    'key',
+  )
+  // An API key is valid on the shared host only. When a browser login is also
+  // stored, its token reaches the fan-out that includes dedicated boxes. A
+  // fan-out failure leaves the shared list in place.
+  const credentials = await loadCredentials()
+  if (!credentials?.token) return shared
+  try {
+    const fanout = await fetchDatabaseList(
+      new URL('/api/cli/databases', credentials.apiUrl),
+      credentials.token,
+      'jwt',
+    )
+    return mergeDatabaseLists(fanout, shared)
+  } catch {
+    return shared
+  }
 }
 
 // Resolve a name-or-id to a concrete database id (the /v1 mutation endpoints are
@@ -403,16 +461,27 @@ export async function getConnectionInfo(
   dbRef: string,
 ): Promise<ConnectionInfo> {
   const auth = await resolveAuth()
-  if (auth.mode === 'jwt') {
+  // The web route looks the id up on whichever box owns it, including a
+  // dedicated box. A stored browser token can do that even when an API key is
+  // also present. The ref is resolved to an id first: the route rejects names.
+  const credentials = await loadCredentials()
+  if (credentials?.token) {
+    const id = await resolveDatabaseId(dbRef)
     const response = await rawFetch(
       new URL(
-        `/api/cli/databases/${encodeURIComponent(dbRef)}/connection-info`,
-        auth.apiUrl,
+        `/api/cli/databases/${encodeURIComponent(id)}/connection-info`,
+        credentials.apiUrl,
       ),
-      auth.token,
+      credentials.token,
       'jwt',
     )
     return (await response.json()) as ConnectionInfo
+  }
+  if (auth.mode === 'jwt') {
+    throw new CloudApiError({
+      status: 0,
+      message: 'Not logged in. Run `layerbase login` first.',
+    })
   }
 
   // Key mode: resolve to an id, read the full database, map its credentials.
@@ -559,6 +628,29 @@ export async function stopDatabase(
 ): Promise<Record<string, unknown>> {
   const response = await keyFetch(
     `/v1/databases/${encodeURIComponent(id)}/stop`,
+    { method: 'POST' },
+  )
+  return (await response.json()) as Record<string, unknown>
+}
+
+// Wake returns as soon as the cloud accepts it (`?mode=async`). A synchronous
+// wake can run for minutes, which would freeze the TUI. Poll the list for the
+// running status. Hibernate stays synchronous: the caller is asking to sleep it.
+export async function wakeDatabase(
+  id: string,
+): Promise<Record<string, unknown>> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(id)}/wake?mode=async`,
+    { method: 'POST' },
+  )
+  return (await response.json()) as Record<string, unknown>
+}
+
+export async function hibernateDatabase(
+  id: string,
+): Promise<Record<string, unknown>> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(id)}/hibernate`,
     { method: 'POST' },
   )
   return (await response.json()) as Record<string, unknown>

@@ -2,10 +2,47 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildCreateDatabaseBody,
+  mergeDatabaseLists,
   pickApiKey,
   pickWebAppBaseUrl,
   exitCodeForStatus,
+  type CloudDatabase,
 } from '@/lib/cloud-api'
+
+function db(overrides: Partial<CloudDatabase>): CloudDatabase {
+  return {
+    id: 'db_shared',
+    name: 'shared',
+    engine: 'postgresql',
+    status: 'running',
+    ...overrides,
+  }
+}
+
+test('mergeDatabaseLists keeps dedicated rows and the shared detail', () => {
+  const merged = mergeDatabaseLists(
+    [
+      db({ id: 'db_shared', name: 'shared', version: undefined }),
+      db({ id: 'db_box', name: 'on-dedicated', status: 'running' }),
+    ],
+    [db({ id: 'db_shared', name: 'shared', version: '18', region: 'iad' })],
+  )
+  assert.equal(merged.length, 2)
+  assert.equal(merged[0]?.version, '18')
+  assert.equal(merged[0]?.region, 'iad')
+  assert.equal(merged[1]?.name, 'on-dedicated')
+})
+
+test('mergeDatabaseLists appends a shared row the fan-out missed', () => {
+  const merged = mergeDatabaseLists(
+    [db({ id: 'db_box', name: 'on-dedicated' })],
+    [db({ id: 'db_shared', name: 'shared', version: '18' })],
+  )
+  assert.deepEqual(
+    merged.map((row) => row.id),
+    ['db_box', 'db_shared'],
+  )
+})
 
 test('pickApiKey: flag wins over env and stored', () => {
   assert.equal(
