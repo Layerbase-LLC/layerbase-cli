@@ -2,6 +2,37 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.1.0
+
+### Added
+
+`layerbase tui` (and `lbase tui`) is an interactive browser for local spindb
+databases and Layerbase cloud databases. Bare `layerbase` with no arguments
+still opens the spindb menu, and `chat` is unchanged.
+
+The browser lists databases and branches on Local and Cloud tabs. Enter or
+Space opens the actions for the selected database. Shift+Tab starts or stops
+it, and the row shows a working state until that finishes.
+
+Local actions are connect, start, stop, branch, copy the connection string,
+and open Layerbase Desktop when that app is installed. If the configured port
+is already taken, start moves the database to a free port and names the
+database that holds the old one. If the pinned engine binaries are missing,
+it asks to download that version and then start.
+
+Cloud actions are connect, start, stop, wake, hibernate, branch, copy the
+connection string, open the database in Layerbase Web, and open the web query
+IDE. Wake is offered on a paid plan. Cloud start, stop, wake, and hibernate
+need an API key. Sign-in is the existing browser login or a pasted API key,
+and the footer shows which credential is in use. The connection string is
+copied to the clipboard and is not printed.
+
+### Changed
+
+`layerbase cloud ls` includes databases on dedicated servers when a browser
+login is stored, not only the shared host. Connection info for one of those
+databases is read through the web app when that login exists.
+
 ## 2.0.1
 
 ### Changed
