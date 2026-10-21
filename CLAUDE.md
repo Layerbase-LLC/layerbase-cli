@@ -17,9 +17,10 @@ registered layerbase verb forwards to the local spindb CLI **verbatim**: raw
   of the fallthrough). Non-TTY no-args prints the unified help and exits 0
   (never hang a prompt in CI).
 - Registered bare verbs are ONLY: `login`, `logout`, `whoami`, `psql`, `mysql`,
-  `redis-cli`, `alias`, `chat`, `cloud`, `spindb`, `help`. This list lives in
-  `src/lib/commands.ts` (`registeredCommandNames()`) - the single source of
-  truth cli.tsx gates the fallthrough on.
+  `redis-cli`, `alias`, `chat`, `tui`, `cloud`, `agent`, `migrate`, `import`,
+  `promote`, `spindb`, `help`. This list lives in `src/lib/commands.ts`
+  (`registeredCommandNames()`) - the single source of truth cli.tsx gates the
+  fallthrough on.
 
 ## Cloud namespace rule
 
