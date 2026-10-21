@@ -76,6 +76,10 @@ and a create must never fail over provenance.
 Auth is a 30-day JWT via the browser loopback flow
 (`src/lib/browser-login.ts`), mirroring layerbase-desktop.
 
+## Issue tracking
+
+The local `tracker.md` is retired as an issue tracker. Concerns now live in GitHub issues on the [Ecosystem tracker](https://github.com/orgs/Layerbase-LLC/projects/1) project. Search open and closed issues in both `Layerbase-LLC/layerbase-cloud` and `Layerbase-LLC/layerbase` before filing, and update the canonical issue instead of appending to `~/dev/layerbase-cloud/tracker.md` (now a read-only legacy index plus Module Sync and Risks & Watchlist). File web-only concerns in `layerbase` and everything else, CLI concerns included, in `layerbase-cloud`; apply the `tracker` label, add the issue to the project, and set Status, Priority and every affected Surface. Keep customer data and secrets out of issues.
+
 ## Process
 
 - Merge flow: feature -> `dev` -> `main`. A push to `main` publishes to npm;
