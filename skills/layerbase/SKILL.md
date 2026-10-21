@@ -152,12 +152,12 @@ serving them well), say so rather than pushing a migration.
 
 ### 3f. Offer concrete next steps
 
-- Today, migrations run from the web flow at
+- Migrations run from the web flow at
   https://layerbase.com/cloud/create/from-source (pick the source, paste
-  credentials, Layerbase reads the source once and never modifies it).
-- A `layerbase migrate` CLI command is planned; if it is available in the
-  installed CLI version, prefer it for a terminal-only flow. Verify with
-  `layerbase --help` before recommending it.
+  credentials, Layerbase reads the source once and never modifies it), or from
+  the terminal with `layerbase migrate --source <id> --target <db-id-or-name>`.
+  Run `layerbase migrate --help` for the source ids and their credential flags,
+  since an older installed CLI may not have the command.
 - For a fresh database, `POST /v1/databases` or `layerbase cloud create` (see
   section 4).
 

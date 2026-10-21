@@ -13,13 +13,15 @@ workflow blocks PRs to `main` unless `package.json` version > the published one.
 registered layerbase verb forwards to the local spindb CLI **verbatim**: raw
 `process.argv` slice, flags included, stdio inherited, exit code propagated.
 
-- Bare `lbase` with no args (TTY) = spindb's interactive menu (the zero-arg case
-  of the fallthrough). Non-TTY no-args prints the unified help and exits 0
-  (never hang a prompt in CI).
+- Bare `lbase` with no args (TTY) opens the database browser (`lbase tui`).
+  Non-TTY no-args prints the unified help and exits 0 (never hang a prompt
+  in CI). `lbase spindb` opens spindb's menu. Any other first token that is
+  not a registered layerbase verb still forwards to spindb.
 - Registered bare verbs are ONLY: `login`, `logout`, `whoami`, `psql`, `mysql`,
-  `redis-cli`, `alias`, `chat`, `cloud`, `spindb`, `help`. This list lives in
-  `src/lib/commands.ts` (`registeredCommandNames()`) - the single source of
-  truth cli.tsx gates the fallthrough on.
+  `redis-cli`, `alias`, `chat`, `tui`, `cloud`, `agent`, `migrate`, `import`,
+  `promote`, `spindb`, `help`. This list lives in `src/lib/commands.ts`
+  (`registeredCommandNames()`) - the single source of truth cli.tsx gates the
+  fallthrough on.
 
 ## Cloud namespace rule
 
@@ -49,8 +51,8 @@ reach spindb.)
 
 `lbase chat` is the Ink interactive console, planned to evolve into an AI chat
 console - keep the name and describe it as "interactive console" in copy (not
-"cloud console"). The bare launch of the Ink app was removed in 1.0.0; `chat`
-is the only entry. Inside it, `/ls` `/connect` `/clone` keep their CLOUD meaning.
+"cloud console"). A bare launch opens `tui`. `chat` stays the account console.
+Inside it, `/ls` `/connect` `/clone` keep their CLOUD meaning.
 
 ## Cloud API
 
@@ -73,6 +75,10 @@ and a create must never fail over provenance.
 
 Auth is a 30-day JWT via the browser loopback flow
 (`src/lib/browser-login.ts`), mirroring layerbase-desktop.
+
+## Issue tracking
+
+The local `tracker.md` is retired as an issue tracker. Concerns now live in GitHub issues on the [Ecosystem tracker](https://github.com/orgs/Layerbase-LLC/projects/1) project. Search open and closed issues in both `Layerbase-LLC/layerbase-cloud` and `Layerbase-LLC/layerbase` before filing, and update the canonical issue instead of appending to `~/dev/layerbase-cloud/tracker.md` (now a read-only legacy index plus Module Sync and Risks & Watchlist). File web-only concerns in `layerbase` and everything else, CLI concerns included, in `layerbase-cloud`; apply the `tracker` label, add the issue to the project, and set Status, Priority and every affected Surface. Keep customer data and secrets out of issues.
 
 ## Process
 

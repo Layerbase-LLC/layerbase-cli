@@ -54,6 +54,7 @@ const UNIFIED_HELP = `
     alias                         Set up the short "lb" command
     chat                          Interactive console for your Layerbase account
     tui                           Visual command center for local and cloud databases
+                                  (also what a bare "lbase" opens in a terminal)
 
   Headless auth (CI / agents)
     Set LAYERBASE_API_KEY (or pass --api-key) to run cloud commands with no
@@ -66,12 +67,14 @@ const UNIFIED_HELP = `
     connection-string" is the deliberate escape hatch and always prints in full.
 
   Notes
-    bare = spindb, cloud = "lbase cloud <verb>"
+    No arguments opens the database browser when stdin and stdout are terminals.
+    Otherwise, it prints this help. "lbase spindb" opens spindb's menu.
+    Unregistered commands forward to spindb. Cloud commands are "lbase cloud <verb>".
     "lbase --help" / "--version" show this help / the layerbase version.
     "lbase version" forwards to spindb's version command.
 
   Examples
-    $ lbase                          # spindb's interactive menu
+    $ lbase                          # the database browser (in a terminal)
     $ lbase create my-db --engine sqlite
     $ lbase login
     $ lbase promote ./app.db --write-env
@@ -320,12 +323,12 @@ if (!leadingCommand && rawArgs.length > 0) {
   }
 }
 
-// Bare invocation with no args: on a TTY hand off to spindb's interactive menu
-// (the zero-arg case of the fallthrough); in a non-TTY context (pipes, CI)
-// print the unified help and exit 0 instead of hanging on a prompt.
+// Bare invocation opens the browser when stdin and stdout are both terminals.
+// Otherwise (pipes, redirection, CI), print the unified help and exit 0.
 if (rawArgs.length === 0) {
-  if (process.stdin.isTTY) {
-    process.exit(await runSpindb([]))
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    await runTui()
+    process.exit(0)
   }
   printHelp()
   process.exit(0)
@@ -428,8 +431,8 @@ if (command === 'help') {
   process.stderr.write('Usage: layerbase agent init [--global] [--force]\n')
   process.exit(1)
 } else if (command === 'chat') {
-  // chat is the ONLY entry into the Ink interactive console (the bare no-arg
-  // launch moved to spindb). It needs a real terminal for the prompt.
+  // chat is the account console. A bare launch opens the database browser.
+  // It needs a real terminal for the prompt.
   if (!process.stdin.isTTY) {
     process.stderr.write('layerbase chat needs an interactive terminal.\n')
     process.exit(1)

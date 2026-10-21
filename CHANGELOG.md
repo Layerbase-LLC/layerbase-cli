@@ -2,6 +2,17 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.2.0
+
+### Changed
+
+Bare `layerbase` (or `lbase`) with no arguments opens the database browser
+(`layerbase tui`) instead of the spindb menu when both stdin and stdout are
+terminals (TTYs). The spindb menu stays at `layerbase spindb`. Unregistered
+commands, such as `lbase create` and `lbase list`, still forward to spindb
+verbatim. When either stream is not a terminal, a no-argument run prints the
+help and exits 0.
+
 ## 2.1.0
 
 ### Added
