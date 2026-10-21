@@ -2,6 +2,14 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.2.1
+
+### Changed
+
+Agent instructions (`CLAUDE.md`, `AGENTS.md`) now point at GitHub issues and the
+Ecosystem tracker project, and route CLI issues to `layerbase-cli`. No code
+changes.
+
 ## 2.2.0
 
 ### Changed
