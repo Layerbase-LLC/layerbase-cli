@@ -13,9 +13,10 @@ workflow blocks PRs to `main` unless `package.json` version > the published one.
 registered layerbase verb forwards to the local spindb CLI **verbatim**: raw
 `process.argv` slice, flags included, stdio inherited, exit code propagated.
 
-- Bare `lbase` with no args (TTY) = spindb's interactive menu (the zero-arg case
-  of the fallthrough). Non-TTY no-args prints the unified help and exits 0
-  (never hang a prompt in CI).
+- Bare `lbase` with no args (TTY) opens the database browser (`lbase tui`).
+  Non-TTY no-args prints the unified help and exits 0 (never hang a prompt
+  in CI). `lbase spindb` opens spindb's menu. Any other first token that is
+  not a registered layerbase verb still forwards to spindb.
 - Registered bare verbs are ONLY: `login`, `logout`, `whoami`, `psql`, `mysql`,
   `redis-cli`, `alias`, `chat`, `tui`, `cloud`, `agent`, `migrate`, `import`,
   `promote`, `spindb`, `help`. This list lives in `src/lib/commands.ts`
@@ -50,8 +51,8 @@ reach spindb.)
 
 `lbase chat` is the Ink interactive console, planned to evolve into an AI chat
 console - keep the name and describe it as "interactive console" in copy (not
-"cloud console"). The bare launch of the Ink app was removed in 1.0.0; `chat`
-is the only entry. Inside it, `/ls` `/connect` `/clone` keep their CLOUD meaning.
+"cloud console"). A bare launch opens `tui`. `chat` stays the account console.
+Inside it, `/ls` `/connect` `/clone` keep their CLOUD meaning.
 
 ## Cloud API
 
