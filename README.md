@@ -31,7 +31,7 @@ This installs two commands, `layerbase` and a shorter `lbase`. For a two-letter
 ## Quick start
 
 ```bash
-lbase                        # database browser (local and cloud)
+lbase                        # database browser (local and cloud, in a terminal)
 lbase create my-db --engine postgres   # any spindb command, verbatim
 lbase login                  # sign in through your browser
 lbase promote ./app.db       # put a local database in the cloud, data included
@@ -55,10 +55,12 @@ lbase branch my-db feature-x            # == spindb branch my-db feature-x
 lbase <cmd> --help                      # == spindb <cmd> --help
 ```
 
-Bare `lbase` with no arguments opens the database browser (`lbase tui`).
-`lbase spindb` opens spindb's own interactive menu. Every other command still
-forwards to spindb. If spindb does not recognize a command either, spindb's
-own error is shown and the exit code is nonzero.
+Bare `lbase` with no arguments opens the database browser (`lbase tui`) only
+when both stdin and stdout are terminals (TTYs). Otherwise, it prints the
+unified help and exits 0. `lbase spindb` opens spindb's own interactive menu.
+Unregistered commands, such as `create` and `list`, still forward to spindb.
+If spindb does not recognize a command either, spindb's own error is shown and
+the exit code is nonzero.
 
 ## Cloud account
 
