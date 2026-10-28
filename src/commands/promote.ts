@@ -12,6 +12,8 @@ import {
 import type { CreateDatabaseResult, CreateSource } from '@/lib/cloud-api'
 import { captureSpindb, parseLastJson } from '@/lib/run-spindb'
 import { confirm, decideConfirmation } from '@/lib/confirm'
+import { createWithCapacityConsent } from '@/lib/capacity-risk'
+import { askCapacityRisk } from '@/ui/capacity-risk-prompt'
 import { forOutput, reportError, writeJson } from '@/lib/cli-output'
 import { formatBytes, uploadAndImport } from '@/commands/import'
 import { writeEnvAssignment } from '@/lib/env-file'
@@ -180,12 +182,27 @@ async function createWithVersion(options: {
   localVersion?: string
   engineLabel: string
   source: CreateSource
+  acknowledgeCapacityRisk: boolean
   say: (message: string) => void
 }): Promise<CreateDatabaseResult> {
-  const { name, engine, version, localVersion, engineLabel, source, say } =
-    options
+  const {
+    name,
+    engine,
+    version,
+    localVersion,
+    engineLabel,
+    source,
+    acknowledgeCapacityRisk,
+    say,
+  } = options
   try {
-    return await createDatabase({ name, engine, version, source })
+    return await createDatabase({
+      name,
+      engine,
+      version,
+      source,
+      acknowledgeCapacityRisk,
+    })
   } catch (error) {
     if (
       !version ||
@@ -204,7 +221,13 @@ async function createWithVersion(options: {
           ? `${engineLabel} ${retry.version} instead.`
           : `the default ${engineLabel} version instead.`),
     )
-    return createDatabase({ name, engine, version: retry?.version, source })
+    return createDatabase({
+      name,
+      engine,
+      version: retry?.version,
+      source,
+      acknowledgeCapacityRisk,
+    })
   }
 }
 
@@ -241,7 +264,7 @@ async function dashboardUrl(id: string): Promise<string> {
 }
 
 // `layerbase promote <source> [--from pglite] [--target pgsqlite] [--name db]
-//  [--write-env] [--yes] [--json]`
+//  [--write-env] [--yes] [--accept-capacity-risk] [--json]`
 export async function runPromote(options: {
   args: string[]
   flags: CommandFlags
@@ -355,14 +378,22 @@ export async function runPromote(options: {
     // graduated prototypes are countable. Never the path or the container name:
     // those are the user's filesystem, not our metric. cloud-api sanitizes this
     // again on the way out as a backstop.
-    const created = await createWithVersion({
-      name,
-      engine: target.engine,
-      version: plan.version,
-      localVersion,
-      engineLabel: plan.engineLabel,
-      source: { via: 'promote', kind: source.kind },
-      say,
+    const created = await createWithCapacityConsent({
+      create: (acknowledgeCapacityRisk) =>
+        createWithVersion({
+          name,
+          engine: target.engine,
+          version: plan.version,
+          localVersion,
+          engineLabel: plan.engineLabel,
+          source: { via: 'promote', kind: source.kind },
+          acknowledgeCapacityRisk,
+          say,
+        }),
+      acceptFlag: flags.acceptCapacityRisk ?? false,
+      interactive,
+      ask: askCapacityRisk,
+      warn: (text) => process.stderr.write(`${text}\n`),
     })
 
     // No offer list was readable, so the cloud picked the version. Say which

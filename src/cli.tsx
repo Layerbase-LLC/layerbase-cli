@@ -40,6 +40,7 @@ const UNIFIED_HELP = `
     login / logout / whoami       Manage your Layerbase session
     cloud ls                      List your cloud databases (--json to script)
     cloud create <name> --engine <e> [--ttl 2h]  Provision a database
+                                  (--accept-capacity-risk: see Capacity warnings)
     cloud delete <db> --yes       Delete a cloud database
     cloud start / stop <db>       Start or stop a cloud database
     cloud branch <db> <name>      Create/reset/delete/ls database branches
@@ -60,6 +61,16 @@ const UNIFIED_HELP = `
     Set LAYERBASE_API_KEY (or pass --api-key) to run cloud commands with no
     browser: calls go straight to the cloud API. "layerbase login --api-key
     <key>" saves it. Create a key at https://layerbase.com/cloud/settings.
+
+  Capacity warnings
+    When your account container or server is under memory or storage
+    pressure, "cloud create" and "promote" show a warning with the current
+    usage and ask before creating. Without a terminal they exit 7 instead;
+    pass --accept-capacity-risk to create anyway. Other 409s still exit 5.
+
+  Exit codes
+    0 success, 1 usage/generic, 3 auth, 4 account paused, 5 capacity (try
+    later), 6 quota or rate limit, 7 capacity risk not accepted
 
   Secrets
     Connection strings and passwords print redacted (user:****@host). Pass
@@ -87,7 +98,7 @@ const CLOUD_HELP = `
   Cloud account commands
 
     lbase cloud ls                 List your cloud databases (--json to script)
-    lbase cloud create <name> --engine <e> [--ttl 2h] [--json]
+    lbase cloud create <name> --engine <e> [--ttl 2h] [--accept-capacity-risk] [--json]
                                    Provision a database (--ttl makes it transient)
     lbase cloud delete <db> --yes  Delete a database (--yes to skip the prompt)
     lbase cloud start <db>         Start a database
@@ -108,6 +119,11 @@ const CLOUD_HELP = `
   Connection strings print with the password redacted (user:****@host). Pass
   --show-secrets (alias --reveal) to print them in full. "cloud
   connection-string" is the deliberate escape hatch and always prints in full.
+
+  Capacity warnings: when your account container or server is under memory or
+  storage pressure, "cloud create" prints the usage the cloud reports and asks
+  before creating. With no terminal (or --json) it exits 7 and creates nothing;
+  --accept-capacity-risk creates it anyway. Other 409 refusals exit 5.
 `
 
 const MIGRATE_HELP = `
@@ -175,7 +191,8 @@ const PROMOTE_HELP = `
   layerbase promote - put a local database in the cloud, data included
 
     layerbase promote <file-or-container> [--target pgsqlite] [--name <db>]
-                      [--from <kind>] [--write-env] [--yes] [--json]
+                      [--from <kind>] [--write-env] [--yes]
+                      [--accept-capacity-risk] [--json]
 
   It creates a NEW cloud database sized to the source, imports the data, and
   prints the connection string. One command instead of create + dump + import.
@@ -210,6 +227,11 @@ const PROMOTE_HELP = `
     --write-env    rewrite DATABASE_URL in ./.env (opt-in, creates the file if
                    missing, never touches other lines)
     --yes (-y)     skip the confirmation prompt
+    --accept-capacity-risk
+                   create the database even when the cloud warns that your
+                   account container or server is under memory or storage
+                   pressure. Without it, a non-interactive run exits 7 and
+                   creates nothing; a terminal run shows the warning and asks
     --json         print one machine-readable result object
 
   Needs a Layerbase API key (LAYERBASE_API_KEY, --api-key, or a browser login
@@ -368,6 +390,9 @@ const cli = meow(UNIFIED_HELP, {
     engine: { type: 'string' },
     ttl: { type: 'string' },
     yes: { type: 'boolean', default: false, shortFlag: 'y' },
+    // cloud create / promote: proceed when the cloud warns the target is under
+    // memory or storage pressure (exit 7 without it in a non-interactive run).
+    acceptCapacityRisk: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
     global: { type: 'boolean', default: false },
     // migrate / import / promote flags.

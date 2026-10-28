@@ -9,6 +9,8 @@ import type { CommandFlags } from '@/ui/app'
 import { parseTtlToHours } from '@/lib/duration'
 import { forOutput, reportError, writeJson } from '@/lib/cli-output'
 import { confirm } from '@/lib/confirm'
+import { createWithCapacityConsent } from '@/lib/capacity-risk'
+import { askCapacityRisk } from '@/ui/capacity-risk-prompt'
 
 function expiresAtOf(result: {
   expiresAt?: string | null
@@ -17,7 +19,8 @@ function expiresAtOf(result: {
   return result.expiresAt ?? result.expires_at ?? null
 }
 
-// `layerbase cloud create <name> --engine <engine> [--ttl 2h] [--json]`
+// `layerbase cloud create <name> --engine <engine> [--ttl 2h]
+//  [--accept-capacity-risk] [--json]`
 export async function runCreate(options: {
   args: string[]
   flags: CommandFlags
@@ -52,11 +55,19 @@ export async function runCreate(options: {
     // Plain CLI create, so promote, `cloud create`, and the dashboard stay
     // distinguishable in the cloud's provenance rollup. No kind: there is no
     // local source here.
-    const result = await createDatabase({
-      name,
-      engine,
-      ttlHours,
-      source: { via: 'cli' },
+    const result = await createWithCapacityConsent({
+      create: (acknowledgeCapacityRisk) =>
+        createDatabase({
+          name,
+          engine,
+          ttlHours,
+          source: { via: 'cli' },
+          acknowledgeCapacityRisk,
+        }),
+      acceptFlag: options.flags.acceptCapacityRisk ?? false,
+      interactive: Boolean(process.stdin.isTTY) && !json,
+      ask: askCapacityRisk,
+      warn: (text) => process.stderr.write(`${text}\n`),
     })
     const expiresAt = expiresAtOf(result)
     const isTransient = result.transient === true || Boolean(expiresAt)

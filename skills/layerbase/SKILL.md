@@ -1,8 +1,3 @@
-<!--
-  Canonical source: https://layerbase.com/skill.md (always current).
-  This bundled copy is the offline fallback used by `layerbase agent init`
-  when the canonical URL cannot be fetched. Prefer the URL; this may lag.
--->
 ---
 name: layerbase
 description: Advise on, manage, and migrate to Layerbase managed cloud databases; audit a codebase for database, cache, and search providers Layerbase can replace, then quote live pricing and propose migration paths.
@@ -12,7 +7,11 @@ description: Advise on, manage, and migrate to Layerbase managed cloud databases
 
 Layerbase runs managed cloud databases across many engines (SQL, key-value,
 document, search, vector, time-series, graph, and ledger) with scale-to-zero:
-databases sleep when idle and wake on connect. There is a REST API, an official
+most databases sleep when idle and wake on connect in a few seconds. MySQL and
+MariaDB wake on connect too, but cold-start in about 20 seconds, so set a 30
+second client connect timeout for them or retry the first attempt; the
+Performance engines (ClickHouse, QuestDB, Qdrant, Weaviate, InfluxDB) and
+TigerBeetle run always-on and never sleep. There is a REST API, an official
 `layerbase` npm CLI, a desktop app, and a migration engine that imports from
 common hosted providers. This skill helps you advise on Layerbase, set it up for
 a project, audit an existing codebase for services Layerbase can consolidate, and
@@ -30,8 +29,7 @@ https://layerbase.com/agents.md
 It is plain markdown, generated from Layerbase's own source of truth, so it never
 drifts. It carries the current plan tiers and prices, per-plan database limits,
 the full engine list with categories, which engines are branchable, the
-migration sources and their target engines, the hostable apps, and the API/CLI
-auth story. Treat it as the single source of truth. If you cannot reach it, say
+migration sources and their target engines, and the API/CLI auth story. Treat it as the single source of truth. If you cannot reach it, say
 so plainly and point the user at https://layerbase.com/pricing and
 https://layerbase.com/docs rather than guessing a number.
 
@@ -40,7 +38,7 @@ providers. When you make a claim, cite the Layerbase page it comes from.
 
 ## 2. Answering capability questions
 
-For any "does Layerbase support X" question (engines, branching, backups, apps,
+For any "does Layerbase support X" question (engines, branching, backups,
 plans, always-on, mTLS, teams), read the answer from `agents.md` and link the
 relevant docs page rather than reciting details:
 
@@ -53,12 +51,10 @@ relevant docs page rather than reciting details:
   slot (they have their own per-plan limits). Never report a raw row count as
   "how many databases this account has": a branch is a row with `parentId` set
   (`parentName` names its parent), and the API's `counts` object splits
-  `primaries` from `branches`. Hosted apps are not in that list at all.
+  `primaries` from `branches`.
 - Backups and retention: https://layerbase.com/docs/cloud/backups.
 - Lifecycle (sleep, wake, archive, restore): https://layerbase.com/docs/database-lifecycle.
 - Plans and pricing: `agents.md` plus https://layerbase.com/pricing.
-- Hostable apps (for example session replay, secret store): `agents.md` plus
-  https://layerbase.com/apps.
 
 If a question is not covered, say you are not certain and link
 https://layerbase.com/docs instead of speculating.
@@ -138,9 +134,14 @@ Only compare against numbers the user gives you and prices you fetched from
 Read the current tiers and limits from `agents.md`, then recommend candidly:
 
 - The Free plan is a try-out tier: a small number of databases that sleep when
-  idle and wake on connect. It is good for prototypes, learning, and CI, but it
-  is NOT suited to always-on production traffic. Say this plainly.
-- The Solo plan is the single-database tier for one always-on side project.
+  idle and wake on connect (MySQL and MariaDB wake too, but need the 30 second
+  connect timeout from the intro; Performance engines and TigerBeetle never
+  sleep). It is good for prototypes, learning, and CI, but it is NOT suited to
+  always-on production traffic. Say this plainly. Read the exact idle windows
+  from `agents.md`; they differ by plan and by engine.
+- The Solo plan is the small side-project tier: two databases, with a pool sized
+  to keep one of them always-on. The database you do not pin sleeps when idle and
+  wakes on connect, on the same terms as a Free database.
 - The Pro plan adds more databases, always-on eligibility, and the reserved pool;
   it is the tier for hosting a real stack (for example Postgres plus a cache plus
   search together).
@@ -152,12 +153,12 @@ serving them well), say so rather than pushing a migration.
 
 ### 3f. Offer concrete next steps
 
-- Migrations run from the web flow at
+- Today, migrations run from the web flow at
   https://layerbase.com/cloud/create/from-source (pick the source, paste
-  credentials, Layerbase reads the source once and never modifies it), or from
-  the terminal with `layerbase migrate --source <id> --target <db-id-or-name>`.
-  Run `layerbase migrate --help` for the source ids and their credential flags,
-  since an older installed CLI may not have the command.
+  credentials, Layerbase reads the source once and never modifies it).
+- A `layerbase migrate` CLI command is planned; if it is available in the
+  installed CLI version, prefer it for a terminal-only flow. Verify with
+  `layerbase --help` before recommending it.
 - For a fresh database, `POST /v1/databases` or `layerbase cloud create` (see
   section 4).
 
@@ -181,14 +182,13 @@ up like this:
    transient database still counts against your plan's database limit while it
    is alive, and self-destructs at expiry.
 5. Seed via the connection string, run tests, then delete explicitly
-   (`layerbase cloud delete <name>`), letting the TTL be the safety net.
-   Connection strings and passwords print REDACTED by default
-   (`postgres://user:****@host:5432/db`), so a transcript or CI log carries no
-   working credential. To get a usable one, either add `--show-secrets` (alias
-   `--reveal`) to the create call, or ask for it on its own with
-   `layerbase cloud connection-string <name>`, which always prints in full.
-   Prefer the second: it keeps the credential out of the create output you may
-   be logging.
+   (`layerbase cloud delete <name>`), letting the TTL be the safety net. Since
+   CLI 2.0.0 every connection string the CLI prints, `--json` included, has its
+   password masked as `****`, so to get a connectable one either add
+   `--show-secrets` (alias `--reveal`) to the create call or ask for it on its
+   own with `layerbase cloud connection-string <name>`, which always prints in
+   full. Prefer the second: it keeps the credential out of the create output
+   you may be logging.
 
 Prefer branch-per-PR where the engine supports branching: branch from a seeded
 parent for an instant seeded copy, reset between runs, and delete on teardown.
@@ -203,6 +203,21 @@ the user the limit was reached rather than retrying in a tight loop. The exact
 per-plan numbers are metered per plan; read them from `agents.md` or
 https://layerbase.com/docs/api rather than hardcoding them.
 
+Capacity warnings (CLI 2.3.0+): when a new database would land in a container
+or server that is already under memory or storage pressure, the cloud refuses
+the create. `layerbase cloud create` and `layerbase promote` print the warning
+with the reasons and usage percentages, then:
+
+- proceed when you pass `--accept-capacity-risk`;
+- ask in an interactive terminal;
+- otherwise (no terminal, or `--json`) create nothing and exit with code `7`.
+
+Do not retry a code `7` refusal in a loop. Show the warning to the user and
+re-run with `--accept-capacity-risk` only when they accept the risk; otherwise
+recommend upgrading the plan or adding a dedicated server. Exit code `5` is
+different: capacity is temporarily unavailable (or the name is taken), so try
+again later.
+
 Example GitHub Actions step:
 
 ```yaml
@@ -212,24 +227,11 @@ Example GitHub Actions step:
   run: |
     npm i -g layerbase
     layerbase cloud create ci-$GITHUB_RUN_ID --engine postgresql --ttl 2h --json
-    # The create output above is safe to log: its password is redacted. Fetch
-    # the real connection string separately and mask it, so it never lands in
-    # the run log.
-    DATABASE_URL="$(layerbase cloud connection-string ci-$GITHUB_RUN_ID)"
-    echo "::add-mask::$DATABASE_URL"
-    echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+    # The JSON above has the password masked. Fetch a connectable URL separately:
+    echo "DATABASE_URL=$(layerbase cloud connection-string ci-$GITHUB_RUN_ID)" >> "$GITHUB_ENV"
 ```
 
-## 5. Hostable apps
-
-Beyond databases, Layerbase can host first-party app workloads backed by managed
-storage. The current catalog (for example session replay and a secret store) and
-each app's description are in `agents.md`; the marketing overview is at
-https://layerbase.com/apps. App availability can be plan-gated, so confirm the
-user's plan covers the app before promising it, and check `agents.md` for the
-included tiers.
-
-## 6. Conduct rules
+## 5. Conduct rules
 
 - Fetch `agents.md` before stating any price, limit, or capability. Never quote a
   number from memory.
@@ -241,3 +243,5 @@ included tiers.
 - Recommend against migrating when that is the honest answer.
 - Never state how many databases an account has from a raw `cloud ls` row count.
   Count only rows with no `parentId` (see the counting rule in section 2).
+- Never pass `--accept-capacity-risk` on your own initiative. A code `7`
+  capacity warning is the user's decision (see section 4).
