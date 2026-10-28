@@ -2,6 +2,27 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.3.0
+
+### Added
+
+`lbase cloud create` and `lbase promote` now show a capacity warning when your
+account container or its server is under memory or storage pressure. The
+warning lists the usage the cloud reports (for example, memory at 84% with a
+75% warning threshold) and explains the risk of adding another database there.
+
+- In a terminal, an arrow-key prompt asks whether to proceed or cancel.
+- `--accept-capacity-risk` proceeds after printing the warning.
+- In a non-interactive run (no terminal, or `--json`) without the flag, nothing
+  is created and the command exits with the new exit code `7`, with a hint to
+  re-run with `--accept-capacity-risk`.
+
+A refused create is sent again at most once, and only after the risk is
+accepted. Other `409` refusals keep exit code `5` and their "try again" message.
+Every CLI create now tells the cloud it can show this warning; older cloud
+builds ignore that and behave as before. In `lbase tui`, a refused create shows
+the usage and the `cloud create` command that accepts the risk.
+
 ## 2.2.1
 
 ### Changed

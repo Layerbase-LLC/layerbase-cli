@@ -7,6 +7,9 @@ import {
   stopDatabase,
   wakeDatabase,
   CloudApiError,
+  describeCapacityPressure,
+  isCapacityRiskError,
+  parseCapacityPressure,
 } from '@/lib/cloud-api'
 import { buildConnectionString } from '@/lib/format'
 import { openBrowser } from '@/lib/open-browser'
@@ -140,6 +143,21 @@ export async function createCloudDatabase(options: {
     })
     return { ok: true, name: created.name }
   } catch (error) {
+    // The browser has no room for the full warning and prompt, so a capacity
+    // refusal points at the command that shows both and can accept the risk.
+    if (isCapacityRiskError(error)) {
+      const summary = describeCapacityPressure(
+        parseCapacityPressure(error.info.body?.pressure),
+      ).join('; ')
+      return {
+        ok: false,
+        message:
+          `Capacity warning: ${summary}. Not created. Adding a database ` +
+          'here risks slowdowns, crashes, or data loss. To accept that risk, ' +
+          `run: lbase cloud create ${options.name} --engine ` +
+          `${options.engine} --accept-capacity-risk`,
+      }
+    }
     const message =
       error instanceof CloudApiError
         ? error.message

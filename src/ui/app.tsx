@@ -15,6 +15,8 @@ export type CommandFlags = {
   engine?: string
   ttl?: string
   yes?: boolean
+  // Resend a create the cloud refused for memory/storage pressure (C-622).
+  acceptCapacityRisk?: boolean
   force?: boolean
   global?: boolean
   // migrate / import / promote flags.
