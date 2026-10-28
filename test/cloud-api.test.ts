@@ -119,7 +119,11 @@ test('pickWebAppBaseUrl: falls back when nothing is configured', () => {
 
 test('create body: no source key at all when none is supplied', () => {
   const body = buildCreateDatabaseBody({ name: 'my-db', engine: 'postgresql' })
-  assert.deepEqual(body, { engine: 'postgresql', name: 'my-db' })
+  assert.deepEqual(body, {
+    engine: 'postgresql',
+    name: 'my-db',
+    capacityWarningSupported: true,
+  })
   assert.equal('source' in body, false)
 })
 
@@ -163,8 +167,32 @@ test('create body: promote sends via and the source kind', () => {
   assert.deepEqual(body, {
     engine: 'sqlite',
     name: 'app',
+    capacityWarningSupported: true,
     source: { via: 'promote', kind: 'sqlite' },
   })
+})
+
+test('create body: acknowledgeCapacityRisk travels only when accepted', () => {
+  const plain = buildCreateDatabaseBody({ name: 'a', engine: 'redis' })
+  assert.equal(plain.capacityWarningSupported, true)
+  assert.equal('acknowledgeCapacityRisk' in plain, false)
+  assert.equal(
+    'acknowledgeCapacityRisk' in
+      buildCreateDatabaseBody({
+        name: 'a',
+        engine: 'redis',
+        acknowledgeCapacityRisk: false,
+      }),
+    false,
+  )
+  assert.equal(
+    buildCreateDatabaseBody({
+      name: 'a',
+      engine: 'redis',
+      acknowledgeCapacityRisk: true,
+    }).acknowledgeCapacityRisk,
+    true,
+  )
 })
 
 test('create body: every promote source kind survives the sanitizer', () => {

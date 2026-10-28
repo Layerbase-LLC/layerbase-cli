@@ -73,7 +73,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase logout` | Remove the stored credentials. |
 | `lbase whoami` | Show the signed-in account (and API-key usage in key mode) (`--json`). |
 | `lbase cloud ls` | List your cloud databases and branches (`--json` for scripting). |
-| `lbase cloud create <name> --engine <e> [--ttl 2h]` | Provision a database (`--ttl` makes it transient). |
+| `lbase cloud create <name> --engine <e> [--ttl 2h]` | Provision a database (`--ttl` makes it transient; `--accept-capacity-risk`, see [Capacity warnings](#capacity-warnings)). |
 | `lbase cloud delete <db> --yes` | Delete a database (`--yes`/`-y` to skip the prompt). |
 | `lbase cloud start <db>` / `stop <db>` | Start or stop a database. |
 | `lbase cloud branch <db> <name>` | Create or reuse a branch (idempotent). |
@@ -119,6 +119,39 @@ password and the discrete credential fields (`password`, `restToken`,
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
 supports `--json` and returns a meaningful exit code.
 
+### Capacity warnings
+
+Layerbase places your databases inside shared VMs and containers. When your
+account container or its server is already under memory or storage pressure,
+`cloud create` and `promote` do not create the database straight away. They
+print the usage the cloud reports, for example:
+
+```
+Capacity warning:
+  Memory at 84% used (warning threshold 75%) on your account container
+```
+
+followed by this notice:
+
+> Layerbase stays affordable by provisioning databases for you inside shared
+> VMs and containers. Your plan allows several databases in one container. That
+> does not make it the right architecture for every workload. Based on your
+> current usage, adding another database here is likely to cause slowdowns or a
+> crash, which can result in data loss. If you proceed, you accept that risk,
+> and Layerbase may not be able to recover lost data. We recommend upgrading
+> your plan or adding a dedicated server.
+
+- **In a terminal**, an arrow-key prompt asks whether to proceed. Cancel is
+  selected by default.
+- **With `--accept-capacity-risk`**, the warning still prints and the create
+  goes ahead.
+- **Without a terminal (CI, pipes) or with `--json`**, and without the flag,
+  nothing is created and the command exits `7` with a hint to re-run with
+  `--accept-capacity-risk`.
+
+The CLI never retries on its own: a refused create is sent again at most once,
+and only after you accept the risk.
+
 ## Promote a local database to the cloud
 
 `lbase promote` is the graduation path for a prototype: it creates a **new**
@@ -132,6 +165,11 @@ lbase promote ./dump.sql                  # Postgres-dialect SQL dump
 lbase promote my-local-pg                 # a local spindb container
 lbase promote ./app.db --write-env --yes  # and rewrite DATABASE_URL in ./.env
 ```
+
+Promote creates a new cloud database, so it shows the same
+[capacity warning](#capacity-warnings) as `cloud create` when your account
+container or server is under pressure; `--accept-capacity-risk` proceeds without
+the prompt.
 
 The source is **detected, never guessed**: binary files are identified by their
 header (a `.db` that is really a DuckDB file is treated as DuckDB), `.sql` is a
@@ -304,7 +342,10 @@ steps:
 ```
 
 Exit codes for scripting: `0` success, `1` usage/generic, `3` auth (invalid or
-revoked key), `4` account paused, `5` capacity, `6` quota or rate limit.
+revoked key), `4` account paused, `5` capacity (try again later), `6` quota or
+rate limit, `7` capacity risk not accepted (the target is under memory or
+storage pressure; re-run with `--accept-capacity-risk` to create anyway, see
+[Capacity warnings](#capacity-warnings)).
 
 ## Agents
 

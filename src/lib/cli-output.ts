@@ -1,4 +1,4 @@
-import { CloudApiError, exitCodeForStatus } from '@/lib/cloud-api'
+import { CloudApiError, exitCodeForCloudError } from '@/lib/cloud-api'
 import { redactConnectionUri, redactJsonSecrets } from '@/lib/redact'
 
 // Whether the user asked for secrets in the clear (`--show-secrets` / `--reveal`).
@@ -25,7 +25,7 @@ export function forOutput(value: string): string {
 
 // Render an error for a scriptable command: a JSON object on stdout when --json,
 // otherwise a human line on stderr. Returns the exit code the caller should use
-// (script-friendly per exitCodeForStatus for cloud errors, 1 otherwise).
+// (script-friendly per exitCodeForCloudError for cloud errors, 1 otherwise).
 export function reportError(error: unknown, json: boolean): number {
   if (error instanceof CloudApiError) {
     const { status, code, message } = error.info
@@ -37,7 +37,7 @@ export function reportError(error: unknown, json: boolean): number {
     } else {
       process.stderr.write(`${safe}\n`)
     }
-    return exitCodeForStatus(status)
+    return exitCodeForCloudError({ status, code })
   }
 
   const message = forOutput(

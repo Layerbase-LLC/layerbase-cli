@@ -131,6 +131,127 @@ export function exitCodeForStatus(status: number): number {
   }
 }
 
+// 7: a create was refused because the target is under memory or storage
+// pressure and the capacity risk was not accepted (no --accept-capacity-risk in
+// a non-interactive run, or Cancel at the prompt). Distinct from 5 on purpose:
+// 5 means "try later", 7 means "re-run with --accept-capacity-risk to proceed".
+export const EXIT_CAPACITY_RISK = 7
+
+export const CAPACITY_RISK_CODE = 'capacity_risk_unacknowledged'
+
+// Status-based mapping plus the typed codes that need their own exit code.
+export function exitCodeForCloudError(info: {
+  status: number
+  code?: string
+}): number {
+  if (info.code === CAPACITY_RISK_CODE) return EXIT_CAPACITY_RISK
+  return exitCodeForStatus(info.status)
+}
+
+// The pressure object the cloud attaches to a capacity refusal (and returns
+// from GET /v1/placement/pressure). Percentages are null when the cloud could
+// not sample that resource.
+export type CapacityPressure = {
+  pressured: boolean
+  reasons: string[]
+  memoryPercent: number | null
+  storagePercent: number | null
+  scope?: string
+  thresholds?: { memoryPercent?: number; storagePercent?: number }
+}
+
+function percentOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+// Defensive parse: anything missing becomes empty/null rather than throwing, so
+// a malformed body still produces a readable warning.
+export function parseCapacityPressure(value: unknown): CapacityPressure {
+  const raw =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const thresholdsRaw =
+    raw.thresholds && typeof raw.thresholds === 'object'
+      ? (raw.thresholds as Record<string, unknown>)
+      : undefined
+  return {
+    pressured: raw.pressured === true,
+    reasons: Array.isArray(raw.reasons)
+      ? raw.reasons.filter((r): r is string => typeof r === 'string')
+      : [],
+    memoryPercent: percentOrNull(raw.memoryPercent),
+    storagePercent: percentOrNull(raw.storagePercent),
+    scope: typeof raw.scope === 'string' ? raw.scope : undefined,
+    thresholds: thresholdsRaw
+      ? {
+          memoryPercent:
+            percentOrNull(thresholdsRaw.memoryPercent) ?? undefined,
+          storagePercent:
+            percentOrNull(thresholdsRaw.storagePercent) ?? undefined,
+        }
+      : undefined,
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 10) / 10}%`
+}
+
+// One line per pressured resource, built only from what the response carries:
+// "memory at 84% (threshold 75%)". Never a hardcoded threshold.
+export function describeCapacityPressure(pressure: CapacityPressure): string[] {
+  const lines: string[] = []
+  const resources: Array<{
+    reason: string
+    label: string
+    percent: number | null
+    threshold?: number
+  }> = [
+    {
+      reason: 'memory',
+      label: 'Memory',
+      percent: pressure.memoryPercent,
+      threshold: pressure.thresholds?.memoryPercent,
+    },
+    {
+      reason: 'storage',
+      label: 'Storage',
+      percent: pressure.storagePercent,
+      threshold: pressure.thresholds?.storagePercent,
+    },
+  ]
+  for (const resource of resources) {
+    if (!pressure.reasons.includes(resource.reason)) continue
+    const used =
+      resource.percent == null
+        ? 'under pressure'
+        : `at ${formatPercent(resource.percent)} used`
+    const threshold =
+      resource.threshold == null
+        ? ''
+        : ` (warning threshold ${formatPercent(resource.threshold)})`
+    lines.push(`${resource.label} ${used}${threshold}`)
+  }
+  for (const reason of pressure.reasons) {
+    if (reason !== 'memory' && reason !== 'storage') {
+      lines.push(`${reason} under pressure`)
+    }
+  }
+  if (lines.length === 0) lines.push('Resources under pressure')
+  const scope =
+    pressure.scope === 'host'
+      ? 'the server'
+      : pressure.scope === 'account'
+        ? 'your account container'
+        : undefined
+  return scope ? lines.map((line) => `${line} on ${scope}`) : lines
+}
+
+export function isCapacityRiskError(error: unknown): error is CloudApiError {
+  return (
+    error instanceof CloudApiError && error.info.code === CAPACITY_RISK_CODE
+  )
+}
+
 function mapErrorMessage(
   status: number,
   code: string | undefined,
@@ -174,6 +295,13 @@ function mapErrorMessage(
   }
   if (status === 429) {
     return serverMessage || 'Rate limited. Wait a moment and try again.'
+  }
+  if (code === CAPACITY_RISK_CODE) {
+    const lines = describeCapacityPressure(parseCapacityPressure(body.pressure))
+    return (
+      `Capacity warning: ${lines.join('; ')}. No database was created. ` +
+      'Re-run with --accept-capacity-risk to create it anyway.'
+    )
   }
   if (status === 409) {
     return (
@@ -546,10 +674,19 @@ export function buildCreateDatabaseBody(options: {
   version?: string
   ttlHours?: number
   source?: CreateSource
+  acknowledgeCapacityRisk?: boolean
 }): Record<string, unknown> {
+  // capacityWarningSupported: every CLI create can show the capacity warning,
+  // so the cloud may refuse a pressured create with a 409 the CLI handles
+  // (an older cloud ignores the key). acknowledgeCapacityRisk is sent only on
+  // the resend after the user accepted that warning.
   const body: Record<string, unknown> = {
     engine: options.engine,
     name: options.name,
+    capacityWarningSupported: true,
+  }
+  if (options.acknowledgeCapacityRisk === true) {
+    body.acknowledgeCapacityRisk = true
   }
   // Omitted entirely when unknown, which is what makes the cloud pick its own
   // default version. Never send an empty string: that fails validation.
@@ -576,6 +713,7 @@ export async function createDatabase(options: {
   version?: string
   ttlHours?: number
   source?: CreateSource
+  acknowledgeCapacityRisk?: boolean
 }): Promise<CreateDatabaseResult> {
   const body = buildCreateDatabaseBody(options)
   const response = await keyFetch('/v1/databases', {
