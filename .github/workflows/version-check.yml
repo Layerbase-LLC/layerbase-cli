@@ -29,6 +29,10 @@ jobs:
               console.error("::error::package.json version must be a single-line semver version")
               process.exit(1)
             }
+            if (semver.prerelease(v)) {
+              console.error("::error::package.json version must be a release version: publish.yml does not publish prereleases")
+              process.exit(1)
+            }
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${v}\n`)
           '
 
