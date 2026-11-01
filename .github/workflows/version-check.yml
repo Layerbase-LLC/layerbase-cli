@@ -16,7 +16,25 @@ jobs:
 
       - name: Get PR version
         id: pr_version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        env:
+          SEMVER_LIB: ${{ runner.temp }}/semver-lib/node_modules/semver
+        run: |
+          # The version comes from the PR: treat it as untrusted data.
+          npm install --prefix "$RUNNER_TEMP/semver-lib" --no-save --no-package-lock --ignore-scripts --silent semver@7.6.3
+          node -e '
+            const semver = require(process.env.SEMVER_LIB)
+            const fs = require("fs")
+            const v = JSON.parse(fs.readFileSync("package.json", "utf8")).version
+            if (typeof v !== "string" || /[\r\n]/.test(v) || semver.valid(v) !== v) {
+              console.error("::error::package.json version must be a single-line semver version")
+              process.exit(1)
+            }
+            if (semver.prerelease(v)) {
+              console.error("::error::package.json version must be a release version: publish.yml does not publish prereleases")
+              process.exit(1)
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${v}\n`)
+          '
 
       - name: Get npm version
         id: npm_version
@@ -26,34 +44,32 @@ jobs:
 
       - name: Compare versions
         id: compare
+        env:
+          PR_VERSION: ${{ steps.pr_version.outputs.version }}
+          NPM_VERSION: ${{ steps.npm_version.outputs.version }}
+          SEMVER_LIB: ${{ runner.temp }}/semver-lib/node_modules/semver
         run: |
-          PR_VERSION="${{ steps.pr_version.outputs.version }}"
-          NPM_VERSION="${{ steps.npm_version.outputs.version }}"
-
           echo "PR version: $PR_VERSION"
           echo "npm version: $NPM_VERSION"
 
-          RESULT=$(node -e "
-            const semver = (v) => v.split('.').map(Number);
-            const pr = semver('$PR_VERSION');
-            const npm = semver('$NPM_VERSION');
-
-            for (let i = 0; i < 3; i++) {
-              if (pr[i] > npm[i]) { console.log('greater'); process.exit(0); }
-              if (pr[i] < npm[i]) { console.log('lesser'); process.exit(0); }
-            }
-            console.log('equal');
-          ")
-
-          echo "result=$RESULT" >> $GITHUB_OUTPUT
+          node -e '
+            const semver = require(process.env.SEMVER_LIB)
+            const pr = process.env.PR_VERSION
+            const npm = semver.valid(process.env.NPM_VERSION) ? process.env.NPM_VERSION : "0.0.0"
+            const result = semver.gt(pr, npm) ? "greater" : semver.eq(pr, npm) ? "equal" : "lesser"
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `result=${result}\n`)
+          '
 
       - name: Comment on PR if version not bumped
         if: steps.compare.outputs.result != 'greater'
         uses: actions/github-script@v7
+        env:
+          PR_VERSION: ${{ steps.pr_version.outputs.version }}
+          NPM_VERSION: ${{ steps.npm_version.outputs.version }}
         with:
           script: |
-            const prVersion = '${{ steps.pr_version.outputs.version }}';
-            const npmVersion = '${{ steps.npm_version.outputs.version }}';
+            const prVersion = process.env.PR_VERSION;
+            const npmVersion = process.env.NPM_VERSION;
 
             const [major, minor, patch] = npmVersion.split('.').map(Number);
             const patchBump = `${major}.${minor}.${patch + 1}`;
@@ -109,5 +125,8 @@ jobs:
 
       - name: Success
         if: steps.compare.outputs.result == 'greater'
+        env:
+          PR_VERSION: ${{ steps.pr_version.outputs.version }}
+          NPM_VERSION: ${{ steps.npm_version.outputs.version }}
         run: |
-          echo "Version check passed: ${{ steps.npm_version.outputs.version }} -> ${{ steps.pr_version.outputs.version }}"
+          echo "Version check passed: $NPM_VERSION -> $PR_VERSION"
