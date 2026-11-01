@@ -2,6 +2,14 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.3.1
+
+### Changed
+
+The release version check now reads the `package.json` version as data and
+compares it with the published version using semver, rejecting a version that
+is not a single-line semver string. No CLI behavior changes.
+
 ## 2.3.0
 
 ### Added
