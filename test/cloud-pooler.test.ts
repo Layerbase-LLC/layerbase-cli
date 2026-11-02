@@ -8,7 +8,7 @@ import {
   type PoolerSyncResult,
 } from '@/lib/cloud-api'
 import { reportError } from '@/lib/cli-output'
-import { formatPoolerSyncReport } from '@/commands/cloud-pooler'
+import { formatPoolerSyncReport, stripControl } from '@/commands/cloud-pooler'
 
 const originalFetch = globalThis.fetch
 
@@ -194,4 +194,47 @@ test('applied false prints a retry notice with each pooler that did not apply', 
   assert.match(report.stderr[0]!, /next starts/)
   assert.match(report.stderr[0]!, /again to retry/)
   assert.equal(report.stderr[1], '  host-pgbouncer: pooler is not running')
+})
+
+test('report strips terminal control sequences from server-provided strings', () => {
+  const esc = '\x1b'
+  const report = formatPoolerSyncReport({
+    ref: 'shop',
+    result: result({
+      applied: false,
+      synced: [{ username: `evil${esc}[2K${esc}]0;title\x07` }],
+      skipped: [
+        {
+          username: `bad${esc}[31m`,
+          reason: 'no_password',
+          detail: `Set a password.\nSynced 99 users${esc}[0m\x9b2J`,
+        },
+      ],
+      warnings: [
+        {
+          username: 'app',
+          reason: 'shadowed_by_anonymous_account',
+          detail: `Run: DROP USER ''@'localhost';${esc}[1A`,
+        },
+      ],
+      poolers: [{ pooler: 'proxysql', applied: false, detail: `down${esc}[H` }],
+    }),
+  })
+  const all = [...report.stdout, ...report.stderr].join('\n')
+  assert.doesNotMatch(all, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/)
+  assert.equal(report.stdout[1], '  evil[2K]0;title')
+  assert.equal(
+    report.stdout[4],
+    '  bad[31m (no_password): Set a password.Synced 99 users[0m2J',
+  )
+  assert.equal(
+    report.stdout[7],
+    "  app (shadowed_by_anonymous_account): Run: DROP USER ''@'localhost';[1A",
+  )
+  assert.equal(report.stderr[1], '  proxysql: down[H')
+})
+
+test('stripControl keeps printable text and tabs', () => {
+  assert.equal(stripControl("DROP USER ''@'%';\tok"), "DROP USER ''@'%';\tok")
+  assert.equal(stripControl('a\r\nb\x00c\x7fd'), 'abcd')
 })

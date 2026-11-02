@@ -21,8 +21,20 @@ function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? '' : 's'}`
 }
 
+// Usernames are role names any database user can choose, and every field here
+// comes from the server, so C0/C1 control characters (ESC/CSI sequences that
+// could rewrite or spoof terminal output, and newlines that could forge extra
+// report lines) are removed before printing. --json needs none of this:
+// JSON.stringify escapes them.
+const CONTROL_CHARACTERS = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/g
+
+export function stripControl(value: string): string {
+  return String(value).replace(CONTROL_CHARACTERS, '')
+}
+
 // The human report, one line per entry. Skip and warning details carry the
-// exact fix (for example a DROP USER statement), so they print verbatim.
+// exact fix (for example a DROP USER statement), so their text prints as sent,
+// control characters removed.
 export function formatPoolerSyncReport(options: {
   ref: string
   result: PoolerSyncResult
@@ -32,13 +44,13 @@ export function formatPoolerSyncReport(options: {
   const stderr: string[] = []
 
   if (result.synced.length === 0) {
-    stdout.push(`No users synced to the pooler for ${ref}.`)
+    stdout.push(`No users synced to the pooler for ${stripControl(ref)}.`)
   } else {
     stdout.push(
-      `Synced ${plural(result.synced.length, 'user')} to the pooler for ${ref}:`,
+      `Synced ${plural(result.synced.length, 'user')} to the pooler for ${stripControl(ref)}:`,
     )
     for (const user of result.synced) {
-      stdout.push(`  ${user.username}`)
+      stdout.push(`  ${stripControl(user.username)}`)
     }
   }
 
@@ -46,7 +58,9 @@ export function formatPoolerSyncReport(options: {
     stdout.push('')
     stdout.push(`Skipped ${plural(result.skipped.length, 'user')}:`)
     for (const user of result.skipped) {
-      stdout.push(`  ${user.username} (${user.reason}): ${user.detail}`)
+      stdout.push(
+        `  ${stripControl(user.username)} (${stripControl(user.reason)}): ${stripControl(user.detail)}`,
+      )
     }
   }
 
@@ -55,7 +69,7 @@ export function formatPoolerSyncReport(options: {
     stdout.push('Warnings:')
     for (const warning of result.warnings) {
       stdout.push(
-        `  ${warning.username} (${warning.reason}): ${warning.detail}`,
+        `  ${stripControl(warning.username)} (${stripControl(warning.reason)}): ${stripControl(warning.detail)}`,
       )
     }
   }
@@ -67,7 +81,9 @@ export function formatPoolerSyncReport(options: {
     )
     for (const pooler of result.poolers) {
       if (!pooler.applied) {
-        stderr.push(`  ${pooler.pooler}: ${pooler.detail}`)
+        stderr.push(
+          `  ${stripControl(pooler.pooler)}: ${stripControl(pooler.detail)}`,
+        )
       }
     }
   }

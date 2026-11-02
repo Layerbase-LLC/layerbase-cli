@@ -196,8 +196,9 @@ connection string at once but the pooled one only accepts them after
 `layerbase cloud pooler sync-users <name> --json`. Run it after creating users or
 changing a password; it sends no password. Check `"applied"` in the output: when
 it is `false` the users apply on the pooler's next start or on a retry, so use the
-direct connection string in the meantime. Print any `skipped` or `warnings`
-`detail` to the user verbatim, because it carries the exact fix.
+direct connection string in the meantime. Show the user each `skipped` or
+`warnings` `detail` as its verbatim text, control characters removed, because it
+carries the exact fix.
 
 Prefer branch-per-PR where the engine supports branching: branch from a seeded
 parent for an instant seeded copy, reset between runs, and delete on teardown.
