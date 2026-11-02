@@ -80,6 +80,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase cloud branch reset <db> <name>` | Re-fork a branch from its parent. |
 | `lbase cloud branch delete <db> <name>` | Delete a branch. |
 | `lbase cloud branch ls <db>` | List a database's branches (`--json`). |
+| `lbase cloud pooler sync-users <db>` | Let users created in SQL connect through the pooled connection string (`--json`; see [SQL-created users and the pooler](#sql-created-users-and-the-pooler)). |
 | `lbase cloud connect <db>` | Connect with the engine's native client. |
 | `lbase cloud clone <db> [name]` | Clone a cloud database into a local spindb container. |
 | `lbase cloud connection-string <db>` | Print the connection string (reveals the password; alias: `url`; `--json`). |
@@ -115,7 +116,7 @@ parent); rows are passed through from the API with the connection-string
 password and the discrete credential fields (`password`, `restToken`,
 `psPassword`) masked as `****` (`--show-secrets` keeps the real values).
 `lbase cloud` with no subcommand prints the cloud help. Cloud mutation commands
-(`create`, `delete`, `start`, `stop`, `branch`) run against the cloud API and
+(`create`, `delete`, `start`, `stop`, `branch`, `pooler`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
 supports `--json` and returns a meaningful exit code.
 
@@ -151,6 +152,36 @@ followed by this notice:
 
 The CLI never retries on its own: a refused create is sent again at most once,
 and only after you accept the risk.
+
+### SQL-created users and the pooler
+
+Users you create in SQL (`CREATE USER`, or `CREATE ROLE ... LOGIN`) work on the
+direct connection string immediately. The pooled connection string only accepts
+them after a sync:
+
+```sh
+lbase cloud pooler sync-users my-db
+```
+
+Run it after creating or changing users, and again after adding users or
+changing a password. No password is sent: the cloud reads the users from your
+database. Synced users survive restarts and wakes. PostgreSQL, MySQL and
+MariaDB only.
+
+The output lists the users synced, the users skipped (for example a user with
+no password) and any warnings, each with a detail line that carries the exact
+fix, such as the `DROP USER` statement that removes an anonymous account
+shadowing your user. `--json` prints the cloud's response with `ok: true`
+added.
+
+If a pooler did not take the users yet, the command prints a warning on stderr
+and the users apply when that pooler next starts, or when you run the command
+again. That case still exits `0`, because the users are saved; a script that
+needs the pooled string to work right away checks `"applied"` in the `--json`
+output. A failed call exits non-zero by the usual exit codes: a sync already
+running or one that ran in the last few seconds exits `6` and says how long to
+wait (`retryAfterSeconds` in `--json`), and a database with no pooled endpoint,
+or one that is not in a state to sync, exits `5`.
 
 ## Promote a local database to the cloud
 
