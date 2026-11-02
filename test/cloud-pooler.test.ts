@@ -221,6 +221,7 @@ test('report strips terminal control sequences from server-provided strings', ()
     }),
   })
   const all = [...report.stdout, ...report.stderr].join('\n')
+  // eslint-disable-next-line no-control-regex -- asserting none survive
   assert.doesNotMatch(all, /[\x00-\x08\x0b-\x1f\x7f-\x9f]/)
   assert.equal(report.stdout[1], '  evil[2K]0;title')
   assert.equal(

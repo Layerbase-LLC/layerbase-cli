@@ -26,6 +26,7 @@ function plural(count: number, word: string): string {
 // could rewrite or spoof terminal output, and newlines that could forge extra
 // report lines) are removed before printing. --json needs none of this:
 // JSON.stringify escapes them.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARACTERS = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/g
 
 export function stripControl(value: string): string {
