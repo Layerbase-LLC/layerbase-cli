@@ -28,11 +28,15 @@ export function forOutput(value: string): string {
 // (script-friendly per exitCodeForCloudError for cloud errors, 1 otherwise).
 export function reportError(error: unknown, json: boolean): number {
   if (error instanceof CloudApiError) {
-    const { status, code, message } = error.info
+    const { status, code, message, body } = error.info
     const safe = forOutput(message)
     if (json) {
+      const retryAfterSeconds =
+        typeof body?.retryAfterSeconds === 'number'
+          ? body.retryAfterSeconds
+          : undefined
       process.stdout.write(
-        `${JSON.stringify({ ok: false, error: safe, code, status })}\n`,
+        `${JSON.stringify({ ok: false, error: safe, code, status, retryAfterSeconds })}\n`,
       )
     } else {
       process.stderr.write(`${safe}\n`)

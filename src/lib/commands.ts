@@ -83,7 +83,7 @@ export const COMMANDS: CommandSpec[] = [
   {
     name: 'cloud',
     summary:
-      'Cloud database commands (ls, create, delete, start, stop, branch)',
+      'Cloud database commands (ls, create, delete, start, stop, branch, pooler)',
     cliOnly: true,
   },
   {

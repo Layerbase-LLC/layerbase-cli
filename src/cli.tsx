@@ -19,6 +19,7 @@ import {
   runStop,
 } from '@/commands/cloud-write'
 import { runBranch } from '@/commands/cloud-branch'
+import { runPooler } from '@/commands/cloud-pooler'
 import { runAgentInit } from '@/commands/agent-init'
 import { runMigrate } from '@/commands/migrate'
 import { runImport } from '@/commands/import'
@@ -44,6 +45,7 @@ const UNIFIED_HELP = `
     cloud delete <db> --yes       Delete a cloud database
     cloud start / stop <db>       Start or stop a cloud database
     cloud branch <db> <name>      Create/reset/delete/ls database branches
+    cloud pooler sync-users <db>  Let SQL-created users use the pooled connection
     cloud connect <db>            Connect with the engine's native client
     cloud clone <db> [name]       Clone a cloud database into local spindb
     cloud connection-string <db>  Print the connection string (reveals password)
@@ -107,6 +109,9 @@ const CLOUD_HELP = `
     lbase cloud branch reset <db> <name>  Re-fork a branch from its parent
     lbase cloud branch delete <db> <name> Delete a branch
     lbase cloud branch ls <db>            List a database branches
+    lbase cloud pooler sync-users <db>    Let users created in SQL connect through
+                                          the pooled connection string (run again
+                                          after adding users or changing a password)
     lbase cloud connect <db>       Connect with the engine's native client
     lbase cloud clone <db> [name]  Clone a cloud database into local spindb
     lbase cloud connection-string <db> (alias: url)
@@ -292,6 +297,12 @@ async function runCloud(rest: string[], flags: CommandFlags): Promise<void> {
 
   if (sub === 'branch') {
     process.exit(await runBranch({ args: cloudArgs, flags }))
+  }
+
+  if (sub === 'pooler') {
+    process.exit(
+      await runPooler({ args: cloudArgs, flags, help: wantsHelp(cloudArgs) }),
+    )
   }
 
   if (sub === 'connect') {

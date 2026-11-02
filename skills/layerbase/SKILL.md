@@ -190,6 +190,15 @@ up like this:
    full. Prefer the second: it keeps the credential out of the create output
    you may be logging.
 
+If the run creates its own database users in SQL (`CREATE USER`, or `CREATE
+ROLE ... LOGIN`) on PostgreSQL, MySQL or MariaDB, they work on the direct
+connection string at once but the pooled one only accepts them after
+`layerbase cloud pooler sync-users <name> --json`. Run it after creating users or
+changing a password; it sends no password. Check `"applied"` in the output: when
+it is `false` the users apply on the pooler's next start or on a retry, so use the
+direct connection string in the meantime. Print any `skipped` or `warnings`
+`detail` to the user verbatim, because it carries the exact fix.
+
 Prefer branch-per-PR where the engine supports branching: branch from a seeded
 parent for an instant seeded copy, reset between runs, and delete on teardown.
 Check `agents.md` for the branchable-engine list.
