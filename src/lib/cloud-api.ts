@@ -293,6 +293,13 @@ function mapErrorMessage(
       'Upgrade for a higher limit at https://layerbase.com/pricing.'
     )
   }
+  if (code === 'pooler_sync_cooldown' || code === 'pooler_sync_busy') {
+    const wait =
+      typeof body.retryAfterSeconds === 'number' && body.retryAfterSeconds > 0
+        ? ` Try again in ${Math.ceil(body.retryAfterSeconds)} seconds.`
+        : ' Wait a moment and try again.'
+    return `${serverMessage || 'A pooler user sync is already running.'}${wait}`
+  }
   if (status === 429) {
     return serverMessage || 'Rate limited. Wait a moment and try again.'
   }
@@ -857,6 +864,46 @@ export async function listBranches(parentId: string): Promise<BranchInfo[]> {
   )
   const data = (await response.json()) as { branches: BranchInfo[] }
   return data.branches
+}
+
+export type PoolerSyncSkipReason =
+  | 'no_password'
+  | 'expired'
+  | 'unsupported_auth'
+  | 'unsupported_name'
+  | 'reserved_name'
+  | 'host_not_reachable_from_pooler'
+
+export type PoolerSyncResult = {
+  databaseId: string
+  applied: boolean
+  synced: Array<{ username: string }>
+  skipped: Array<{
+    username: string
+    reason: PoolerSyncSkipReason
+    detail: string
+  }>
+  warnings: Array<{
+    username: string
+    reason: 'shadowed_by_anonymous_account'
+    detail: string
+  }>
+  poolers: Array<{
+    pooler: 'proxysql' | 'pgbouncer' | 'host-pgbouncer'
+    applied: boolean
+    detail: string
+  }>
+}
+
+// Copy the database's SQL-created login users into its connection pooler so
+// the pooled connection string accepts them. No body: the cloud reads the users
+// from the engine itself, and no password crosses the wire.
+export async function syncPoolerUsers(id: string): Promise<PoolerSyncResult> {
+  const response = await keyFetch(
+    `/v1/databases/${encodeURIComponent(id)}/pooler/sync-users`,
+    { method: 'POST' },
+  )
+  return (await response.json()) as PoolerSyncResult
 }
 
 // ─── Migration (import an external database INTO a cloud database) ───────────

@@ -2,6 +2,21 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.4.0
+
+### Added
+
+`lbase cloud pooler sync-users <db>` lets users created in SQL (`CREATE USER`,
+or `CREATE ROLE ... LOGIN`) connect through the pooled connection string. They
+already work on the direct connection string; run this after creating or
+changing them. No password is sent, and synced users survive restarts and
+wakes. The output lists synced users, skipped users and warnings, each with the
+exact fix. When a pooler has not taken the users yet, a warning says they will
+apply when it next starts or on a retry, and the command still exits `0`
+(`--json` reports `"applied": false`). PostgreSQL, MySQL and MariaDB only.
+
+`--json` error output now includes `retryAfterSeconds` when the cloud sends it.
+
 ## 2.3.1
 
 ### Changed
