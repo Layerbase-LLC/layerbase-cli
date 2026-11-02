@@ -2,7 +2,7 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
-## Unreleased
+## 2.4.0
 
 ### Added
 
