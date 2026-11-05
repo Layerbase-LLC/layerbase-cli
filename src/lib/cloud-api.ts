@@ -11,9 +11,11 @@ const USER_AGENT = `layerbase-cli/${getVersion()}`
 export const DEFAULT_API_URL =
   process.env.LAYERBASE_API_URL ?? 'https://layerbase.com'
 
-// Headless (sk_ key) mode talks DIRECTLY to the cloud /v1 API - the same base
-// the public /docs/api and the desktop app use - skipping the web proxy. The
-// enforcement (quota/suspension/rate-limit) already lives cloud-side.
+// Headless (sk_ key) mode talks DIRECTLY to the cloud /v1 API for most calls,
+// the base the public /docs/api uses. Two exceptions go through the web app:
+// creates (POST /api/cli/databases, for placement and the account checks) and
+// a per-database call the API host answers 404 for (the database runs
+// elsewhere; see fetchDatabaseViaWebApp).
 const DEFAULT_CLOUD_API_URL = 'https://cloud.layerbase.dev'
 
 export function cloudApiBaseUrl(): string {
@@ -380,7 +382,61 @@ async function keyFetch(path: string, init?: RequestInit): Promise<Response> {
         'pass --api-key (create one at https://layerbase.com/cloud/settings).',
     })
   }
-  return rawFetch(new URL(path, auth.baseUrl), auth.apiKey, 'key', init)
+  try {
+    return await rawFetch(new URL(path, auth.baseUrl), auth.apiKey, 'key', init)
+  } catch (error) {
+    if (!isDatabaseNotHereError(error, path)) throw error
+    return await fetchDatabaseViaWebApp(path, auth.apiKey, init, error)
+  }
+}
+
+// Per-database /v1 paths: `/v1/databases/<uuid>` and everything under it.
+const DATABASE_PATH =
+  /^\/v1\/databases\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:[/?]|$)/i
+
+// The API host answers for the databases it holds. A database placed elsewhere
+// answers 404 there, so a per-database 404 is retried through the web app,
+// which sends the identical request, with the same key, to wherever the
+// database lives. Pure so the decision is unit-testable.
+export function isDatabaseNotHereError(
+  error: unknown,
+  path: string,
+): error is CloudApiError {
+  return (
+    error instanceof CloudApiError &&
+    error.info.status === 404 &&
+    DATABASE_PATH.test(path)
+  )
+}
+
+export function webAppDatabaseRouteUrl(path: string, webBase: string): URL {
+  return new URL(`/api/cli${path}`, webBase)
+}
+
+async function fetchDatabaseViaWebApp(
+  path: string,
+  apiKey: string,
+  init: RequestInit | undefined,
+  original: CloudApiError,
+): Promise<Response> {
+  try {
+    return await rawFetch(
+      webAppDatabaseRouteUrl(path, await webAppBaseUrl()),
+      apiKey,
+      'key',
+      init,
+    )
+  } catch (error) {
+    // A web app without the route answers 404/405 too: keep the original
+    // answer, which names the database the user asked for.
+    if (
+      error instanceof CloudApiError &&
+      (error.info.status === 404 || error.info.status === 405)
+    ) {
+      throw original
+    }
+    throw error
+  }
 }
 
 export type CloudDatabase = {
@@ -559,17 +615,23 @@ export async function listDatabases(): Promise<CloudDatabase[]> {
     auth.apiKey,
     'key',
   )
-  // An API key is valid on the shared host only. When a browser login is also
-  // stored, its token reaches the fan-out that includes dedicated boxes. A
-  // fan-out failure leaves the shared list in place.
+  // The direct list covers only the box the API host reaches. The web app's
+  // fan-out covers every box: a stored browser login reaches it, and so does
+  // the key itself on a current web app (an older one refuses the key). A
+  // fan-out failure leaves the direct list in place.
   const credentials = await loadCredentials()
-  if (!credentials?.token) return shared
   try {
-    const fanout = await fetchDatabaseList(
-      new URL('/api/cli/databases', credentials.apiUrl),
-      credentials.token,
-      'jwt',
-    )
+    const fanout = credentials?.token
+      ? await fetchDatabaseList(
+          new URL('/api/cli/databases', credentials.apiUrl),
+          credentials.token,
+          'jwt',
+        )
+      : await fetchDatabaseList(
+          new URL('/api/cli/databases', await webAppBaseUrl()),
+          auth.apiKey,
+          'key',
+        )
     return mergeDatabaseLists(fanout, shared)
   } catch {
     return shared
@@ -680,6 +742,7 @@ export function buildCreateDatabaseBody(options: {
   engine: string
   version?: string
   ttlHours?: number
+  region?: string
   source?: CreateSource
   acknowledgeCapacityRisk?: boolean
 }): Record<string, unknown> {
@@ -703,6 +766,12 @@ export function buildCreateDatabaseBody(options: {
   if (options.ttlHours != null) {
     body.ttlHours = options.ttlHours
   }
+  // Omitted when not asked for: the server then uses its default region. The
+  // CLI never checks the value; the server owns the region list and refuses
+  // an unknown or plan-restricted region with a message to show as-is.
+  if (options.region) {
+    body.region = options.region
+  }
   const via = options.source?.via
   if (typeof via === 'string' && SOURCE_TOKEN_PATTERN.test(via)) {
     const kind = options.source?.kind
@@ -714,20 +783,85 @@ export function buildCreateDatabaseBody(options: {
   return body
 }
 
+// The web app's create (POST /api/cli/databases) runs the same placement and
+// account checks as a dashboard create, so a CLI database lands where the
+// dashboard would put it and --region is honored. A web app that predates the
+// route answers 404 or 405; a key then falls back to the direct /v1 create,
+// which still works but cannot place the database or take a region.
+export function isCreateRouteMissing(error: unknown): boolean {
+  return (
+    error instanceof CloudApiError &&
+    (error.info.status === 404 || error.info.status === 405) &&
+    !error.info.code
+  )
+}
+
+export const PROVISIONING_SLOW_CODE = 'provisioning_slow'
+
+async function postCreate(
+  body: Record<string, unknown>,
+  url: URL,
+  token: string,
+  mode: 'key' | 'jwt',
+): Promise<CreateDatabaseResult> {
+  const response = await rawFetch(url, token, mode, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (response.status === 202) {
+    // Accepted but still provisioning past the web app's wait. Not a failure,
+    // but there is no database id to hand back yet.
+    throw new CloudApiError({
+      status: 202,
+      code: PROVISIONING_SLOW_CODE,
+      message:
+        'The database is still being created. Run `layerbase cloud ls` in a ' +
+        'minute to find it; do not create it again.',
+    })
+  }
+  return (await response.json()) as CreateDatabaseResult
+}
+
 export async function createDatabase(options: {
   name: string
   engine: string
   version?: string
   ttlHours?: number
+  region?: string
   source?: CreateSource
   acknowledgeCapacityRisk?: boolean
 }): Promise<CreateDatabaseResult> {
   const body = buildCreateDatabaseBody(options)
-  const response = await keyFetch('/v1/databases', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-  return (await response.json()) as CreateDatabaseResult
+  const auth = await resolveAuth()
+  const webUrl = new URL('/api/cli/databases', await webAppBaseUrl())
+  const token = auth.mode === 'key' ? auth.apiKey : auth.token
+  try {
+    return await postCreate(body, webUrl, token, auth.mode)
+  } catch (error) {
+    if (!isCreateRouteMissing(error)) throw error
+    if (options.region) {
+      throw new CloudApiError({
+        status: 0,
+        message:
+          '--region is not supported by this Layerbase server yet. Omit ' +
+          '--region, or try again later.',
+      })
+    }
+    if (auth.mode !== 'key') {
+      throw new CloudApiError({
+        status: 0,
+        message:
+          'This command needs a Layerbase API key. Set LAYERBASE_API_KEY or ' +
+          'pass --api-key (create one at https://layerbase.com/cloud/settings).',
+      })
+    }
+    return postCreate(
+      body,
+      new URL('/v1/databases', auth.baseUrl),
+      auth.apiKey,
+      'key',
+    )
+  }
 }
 
 // One entry of the cloud engine catalog (GET /v1/engines). Only the fields the

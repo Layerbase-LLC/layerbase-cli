@@ -40,7 +40,8 @@ const UNIFIED_HELP = `
   Cloud account
     login / logout / whoami       Manage your Layerbase session
     cloud ls                      List your cloud databases (--json to script)
-    cloud create <name> --engine <e> [--ttl 2h]  Provision a database
+    cloud create <name> --engine <e> [--ttl 2h] [--region <r>]
+                                  Provision a database
                                   (--accept-capacity-risk: see Capacity warnings)
     cloud delete <db> --yes       Delete a cloud database
     cloud start / stop <db>       Start or stop a cloud database
@@ -100,8 +101,11 @@ const CLOUD_HELP = `
   Cloud account commands
 
     lbase cloud ls                 List your cloud databases (--json to script)
-    lbase cloud create <name> --engine <e> [--ttl 2h] [--accept-capacity-risk] [--json]
-                                   Provision a database (--ttl makes it transient)
+    lbase cloud create <name> --engine <e> [--ttl 2h] [--region <r>]
+                       [--accept-capacity-risk] [--json]
+                                   Provision a database (--ttl makes it transient;
+                                   --region picks where it runs, omit for the
+                                   default; the server lists valid regions)
     lbase cloud delete <db> --yes  Delete a database (--yes to skip the prompt)
     lbase cloud start <db>         Start a database
     lbase cloud stop <db>          Stop a database
@@ -400,6 +404,7 @@ const cli = meow(UNIFIED_HELP, {
     // Cloud-mutation flags.
     engine: { type: 'string' },
     ttl: { type: 'string' },
+    region: { type: 'string' },
     yes: { type: 'boolean', default: false, shortFlag: 'y' },
     // cloud create / promote: proceed when the cloud warns the target is under
     // memory or storage pressure (exit 7 without it in a non-interactive run).

@@ -14,6 +14,8 @@ export type CommandFlags = {
   apiKey?: string
   engine?: string
   ttl?: string
+  // cloud create: where the database runs. Validated by the server only.
+  region?: string
   yes?: boolean
   // Resend a create the cloud refused for memory/storage pressure (C-622).
   acceptCapacityRisk?: boolean
