@@ -2,6 +2,31 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## Unreleased
+
+### Added
+
+`lbase cloud create --region <region>` chooses where the database runs, for
+example `eu-west`. Omit it for the default. The server owns the region list: an
+unknown region is refused with the regions you can use, and a region your plan
+cannot use is refused with what to do instead. The CLI prints either message
+as-is.
+
+### Changed
+
+`lbase cloud create` (and the create step of `promote`) now goes through
+layerbase.com, so a CLI database is placed exactly like a dashboard one and the
+same account checks apply. It works with a browser login as well as an API key.
+Against a server that does not offer this yet, a key-authenticated create falls
+back to the previous direct create, except with `--region`, which then fails
+with a clear message instead of being ignored.
+
+`cloud ls`, name lookups and every per-database command (`delete`, `start`,
+`stop`, `branch`, `import`, `connect` and the rest) now reach a database
+wherever it runs. With only an API key, `cloud ls` also lists databases from
+every location, and a per-database call the API host does not recognize is
+retried through layerbase.com with the same key.
+
 ## 2.4.0
 
 ### Added

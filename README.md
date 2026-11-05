@@ -73,7 +73,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase logout` | Remove the stored credentials. |
 | `lbase whoami` | Show the signed-in account (and API-key usage in key mode) (`--json`). |
 | `lbase cloud ls` | List your cloud databases and branches (`--json` for scripting). |
-| `lbase cloud create <name> --engine <e> [--ttl 2h]` | Provision a database (`--ttl` makes it transient; `--accept-capacity-risk`, see [Capacity warnings](#capacity-warnings)). |
+| `lbase cloud create <name> --engine <e> [--ttl 2h] [--region <r>]` | Provision a database (`--ttl` makes it transient; `--region` picks where it runs, omit it for the default, and the server refuses an unknown or plan-restricted region with what to do; `--accept-capacity-risk`, see [Capacity warnings](#capacity-warnings)). |
 | `lbase cloud delete <db> --yes` | Delete a database (`--yes`/`-y` to skip the prompt). |
 | `lbase cloud start <db>` / `stop <db>` | Start or stop a database. |
 | `lbase cloud branch <db> <name>` | Create or reuse a branch (idempotent). |
