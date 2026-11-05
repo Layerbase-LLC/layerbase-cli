@@ -73,6 +73,14 @@ path, a filename, or a local container name.** Both halves are checked against
 metrics metadata only, fire and forget: an older cloud build ignores the key,
 and a create must never fail over provenance.
 
+Creates go to the web app (`POST /api/cli/databases`, key or browser login),
+which places the database and runs the dashboard's account checks; `--region`
+is passed through and validated there only, never in the CLI. A web app
+without that route answers 404/405, and a key create then falls back to the
+direct `/v1/databases` (never with `--region`). A per-database `/v1` call that
+the API host answers 404 is retried at `/api/cli/v1/databases/...` on the web
+app with the same key, which routes it to wherever the database runs.
+
 Auth is a 30-day JWT via the browser loopback flow
 (`src/lib/browser-login.ts`), mirroring layerbase-desktop.
 

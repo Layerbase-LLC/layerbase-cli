@@ -2,7 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildCreateDatabaseBody,
+  CloudApiError,
+  isCreateRouteMissing,
+  isDatabaseNotHereError,
   mergeDatabaseLists,
+  webAppDatabaseRouteUrl,
   pickApiKey,
   pickWebAppBaseUrl,
   exitCodeForStatus,
@@ -258,4 +262,73 @@ test('create body: an unusable via drops the whole source block', () => {
     })
     assert.equal('source' in body, false, `via: ${via}`)
   }
+})
+
+test('buildCreateDatabaseBody sends --region only when given', () => {
+  const base = { name: 'db', engine: 'postgresql' }
+  assert.equal('region' in buildCreateDatabaseBody(base), false)
+  assert.equal(
+    buildCreateDatabaseBody({ ...base, region: 'eu-west' }).region,
+    'eu-west',
+  )
+})
+
+test('isDatabaseNotHereError retries only a per-database 404', () => {
+  const notFound = new CloudApiError({ status: 404, message: 'nope' })
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  assert.equal(isDatabaseNotHereError(notFound, `/v1/databases/${id}`), true)
+  assert.equal(
+    isDatabaseNotHereError(notFound, `/v1/databases/${id}/branches/x`),
+    true,
+  )
+  assert.equal(isDatabaseNotHereError(notFound, '/v1/databases'), false)
+  assert.equal(
+    isDatabaseNotHereError(notFound, '/v1/migrations/discover'),
+    false,
+  )
+  assert.equal(
+    isDatabaseNotHereError(
+      new CloudApiError({ status: 401, message: 'bad key' }),
+      `/v1/databases/${id}`,
+    ),
+    false,
+  )
+})
+
+test('webAppDatabaseRouteUrl mirrors the /v1 path under /api/cli', () => {
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  assert.equal(
+    webAppDatabaseRouteUrl(
+      `/v1/databases/${id}/branch?x=1`,
+      'https://layerbase.com',
+    ).href,
+    `https://layerbase.com/api/cli/v1/databases/${id}/branch?x=1`,
+  )
+})
+
+test('isCreateRouteMissing falls back only for a web app without the route', () => {
+  assert.equal(
+    isCreateRouteMissing(new CloudApiError({ status: 405, message: '' })),
+    true,
+  )
+  assert.equal(
+    isCreateRouteMissing(new CloudApiError({ status: 404, message: '' })),
+    true,
+  )
+  assert.equal(
+    isCreateRouteMissing(
+      new CloudApiError({ status: 400, code: 'invalid_region', message: '' }),
+    ),
+    false,
+  )
+  assert.equal(
+    isCreateRouteMissing(
+      new CloudApiError({
+        status: 429,
+        code: 'database_limit_reached',
+        message: '',
+      }),
+    ),
+    false,
+  )
 })
