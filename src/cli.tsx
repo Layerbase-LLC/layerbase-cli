@@ -5,7 +5,8 @@ import { runExec } from '@/commands/connect'
 import { runInteractive } from '@/commands/interactive'
 import { runTui } from '@/commands/tui'
 import { runClone } from '@/commands/clone'
-import { runSpindb } from '@/lib/run-spindb'
+import { runSpindb, SIGINT_EXIT_CODE } from '@/lib/run-spindb'
+import { clearTerminal } from '@/lib/terminal'
 import { registeredCommandNames } from '@/lib/commands'
 import { getVersion } from '@/lib/version'
 import { configureCloudAuth } from '@/lib/cloud-api'
@@ -373,8 +374,16 @@ if (rawArgs.length === 0) {
 
 // Explicit "spindb" prefix: strip the token, forward the rest to spindb. Kept
 // as an explicit escape hatch even though bare fallthrough covers most cases.
+// A bare "lbase spindb" is spindb's full-screen menu: leaving it (Exit or
+// Ctrl+C) clears the screen like quitting any app. Other exit codes keep the
+// output so an error stays readable.
 if (leadingCommand === 'spindb') {
-  process.exit(await runSpindb(rawArgs.slice(firstArgIndex + 1)))
+  const spindbArgs = rawArgs.slice(firstArgIndex + 1)
+  const code = await runSpindb(spindbArgs)
+  if (spindbArgs.length === 0 && (code === 0 || code === SIGINT_EXIT_CODE)) {
+    clearTerminal()
+  }
+  process.exit(code)
 }
 
 // Local-first fallthrough: any first token that is NOT a registered layerbase

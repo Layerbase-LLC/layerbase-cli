@@ -2,6 +2,16 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.5.1
+
+### Fixed
+
+Quitting `lbase` (the database browser) with `q`, `Esc Esc` or Ctrl+C now
+clears the screen, so the terminal looks like the app has exited instead of
+leaving its last frame behind. Leaving spindb's menu through `lbase spindb`
+(Exit or Ctrl+C) clears it the same way. A spindb command stopped with Ctrl+C
+now exits 130, as it does when run directly, instead of 0.
+
 ## 2.5.0
 
 ### Added

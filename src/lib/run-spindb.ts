@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { constants } from 'node:os'
 import { existsSync } from 'node:fs'
 import { join, delimiter } from 'node:path'
 
@@ -35,6 +36,8 @@ function spindbInvocation(): { command: string; baseArgs: string[] } {
   const runner = detectPackageRunner()
   return { command: resolveOnPath(runner) ?? runner, baseArgs: ['spindb'] }
 }
+
+export const SIGINT_EXIT_CODE = 128 + constants.signals.SIGINT
 
 const WINDOWS_BATCH_FILE = /\.(cmd|bat)$/i
 
@@ -129,7 +132,11 @@ function spawnSpindb(args: string[], opts: SpawnOptions = {}): Promise<number> {
       }
       settle(127)
     })
-    child.on('exit', (code) => settle(code ?? 0))
+    // A child killed by a signal reports code null; map it to the shell's
+    // 128 + signal convention so Ctrl+C propagates as 130, not success.
+    child.on('exit', (code, signal) =>
+      settle(code ?? (signal ? 128 + (constants.signals[signal] ?? 0) : 0)),
+    )
   })
 }
 
