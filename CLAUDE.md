@@ -92,6 +92,12 @@ The local `tracker.md` is retired as an issue tracker. Concerns now live in GitH
 
 - Merge flow: feature -> `dev` -> `main`. A push to `main` publishes to npm;
   **Bob merges `dev` -> `main`**. Bump `package.json` version for any release PR.
+- `skills/layerbase/SKILL.md` (the offline fallback for `lbase agent init`) is
+  never edited by hand: the source of truth is the web repo's
+  `lib/agents/skill.md`, served at https://layerbase.com/skill.md. Before a
+  release PR run `pnpm sync:skill --check`, and `pnpm sync:skill` if it differs
+  (set `LAYERBASE_SKILL_URL` to a preview deploy when the web change is not on
+  layerbase.com yet).
 - `spindb` on PATH matters for local verification (currently 0.59.0).
 - Test changes by RUNNING the built `dist/cli.js` from a **clean empty
   directory** - spindb scans the cwd for sqlite/duckdb files and can prompt or
