@@ -26,6 +26,7 @@
     "lint": "eslint .",
     "check:types": "tsc --noEmit",
     "check:collisions": "tsx scripts/check-spindb-collisions.ts",
+    "sync:skill": "tsx scripts/sync-skill.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "check": "tsc --noEmit && eslint . && pnpm check:collisions",
     "prepack": "pnpm build"
