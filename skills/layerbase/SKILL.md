@@ -8,8 +8,10 @@ description: Advise on, manage, and migrate to Layerbase managed cloud databases
 Layerbase runs managed cloud databases across many engines (SQL, key-value,
 document, search, vector, time-series, graph, and ledger) with scale-to-zero:
 most databases sleep when idle and wake on connect in a few seconds. MySQL and
-MariaDB wake on connect too, but cold-start in about 20 seconds, so set a 30
-second client connect timeout for them or retry the first attempt; the
+MariaDB wake on connect too, MySQL in about 9
+seconds and MariaDB in about 3 with occasional
+slower wakes, so set a 30 second client connect timeout for them or retry the
+first attempt; the
 Performance engines (ClickHouse, QuestDB, Qdrant, Weaviate, InfluxDB) and
 TigerBeetle run always-on and never sleep (TigerBeetle only on dedicated
 servers, never the shared cloud). There is a REST API, an official
