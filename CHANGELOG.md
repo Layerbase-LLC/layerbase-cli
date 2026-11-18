@@ -2,6 +2,17 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.5.2
+
+### Changed
+
+The agent skill bundled for offline use by `lbase agent init` matches the one
+served at https://layerbase.com/skill.md again. It now says that TigerBeetle
+runs only on dedicated servers, that instant copy-on-write branches need
+Branching turned on for the database, how the Custom tier works, and that MySQL
+wakes in about 9 seconds and MariaDB in about 3, measured in production. The 30
+second connect-timeout advice stays.
+
 ## 2.5.1
 
 ### Fixed
