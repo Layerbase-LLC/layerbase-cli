@@ -4,6 +4,9 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { spawn } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   CloudApiError,
@@ -44,6 +47,9 @@ const CREATED: Reply = {
 
 let server: Server
 let baseUrl = ''
+// An empty home so a developer's stored login (~/.layerbase-cli) cannot
+// override the mock hosts below.
+let isolatedHome = ''
 let replies: Reply[] = []
 let requests: Recorded[] = []
 
@@ -69,11 +75,13 @@ before(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo
   baseUrl = `http://127.0.0.1:${port}`
+  isolatedHome = await mkdtemp(join(tmpdir(), 'layerbase-cli-capacity-'))
 })
 
 after(async () => {
   server.closeAllConnections()
   await new Promise<void>((resolve) => server.close(() => resolve()))
+  await rm(isolatedHome, { recursive: true, force: true })
 })
 
 beforeEach(() => {
@@ -92,6 +100,10 @@ async function runCli(
   const child = spawn(process.execPath, ['--import', 'tsx', CLI, ...args], {
     env: {
       ...process.env,
+      // Creates go through the web app (POST /api/cli/databases) since 2.5.0,
+      // so point it at the mock too; otherwise the test calls layerbase.com.
+      HOME: isolatedHome,
+      LAYERBASE_API_URL: baseUrl,
       LAYERBASE_CLOUD_API_URL: baseUrl,
       LAYERBASE_API_KEY: 'sk_test_capacity',
     },
@@ -123,7 +135,7 @@ test('cloud create: the body declares capacity warning support', async () => {
   assert.equal(result.code, 0)
   assert.equal(requests.length, 1)
   assert.equal(requests[0]?.method, 'POST')
-  assert.equal(requests[0]?.url, '/v1/databases')
+  assert.equal(requests[0]?.url, '/api/cli/databases')
   assert.equal(requests[0]?.body.capacityWarningSupported, true)
   assert.equal('acknowledgeCapacityRisk' in (requests[0]?.body ?? {}), false)
 })
