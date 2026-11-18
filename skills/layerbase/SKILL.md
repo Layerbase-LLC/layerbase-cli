@@ -8,10 +8,13 @@ description: Advise on, manage, and migrate to Layerbase managed cloud databases
 Layerbase runs managed cloud databases across many engines (SQL, key-value,
 document, search, vector, time-series, graph, and ledger) with scale-to-zero:
 most databases sleep when idle and wake on connect in a few seconds. MySQL and
-MariaDB wake on connect too, but cold-start in about 20 seconds, so set a 30
-second client connect timeout for them or retry the first attempt; the
+MariaDB wake on connect too, MySQL in about 9
+seconds and MariaDB in about 3 with occasional
+slower wakes, so set a 30 second client connect timeout for them or retry the
+first attempt; the
 Performance engines (ClickHouse, QuestDB, Qdrant, Weaviate, InfluxDB) and
-TigerBeetle run always-on and never sleep. There is a REST API, an official
+TigerBeetle run always-on and never sleep (TigerBeetle only on dedicated
+servers, never the shared cloud). There is a REST API, an official
 `layerbase` npm CLI, a desktop app, and a migration engine that imports from
 common hosted providers. This skill helps you advise on Layerbase, set it up for
 a project, audit an existing codebase for services Layerbase can consolidate, and
@@ -44,7 +47,8 @@ relevant docs page rather than reciting details:
 
 - Engines, categories, versions: `agents.md` plus https://layerbase.com/docs/api
   (`GET /v1/engines` is the machine-readable registry).
-- Branching (copy-on-write branches per database): the branchable-engine list is
+- Branching (copy-on-write branches per database, once Branching is turned on in
+  the database Settings tab; otherwise a branch is a full copy): the branchable-engine list is
   in `agents.md`; guide at https://layerbase.com/docs/cloud/branching.
   **Counting rule:** `layerbase cloud ls` and `GET /v1/databases` return branches
   in the same flat list as databases, and branches do NOT consume a database
@@ -145,7 +149,9 @@ Read the current tiers and limits from `agents.md`, then recommend candidly:
 - The Pro plan adds more databases, always-on eligibility, and the reserved pool;
   it is the tier for hosting a real stack (for example Postgres plus a cache plus
   search together).
-- The Custom tier is Pro on the user's own dedicated servers.
+- The Custom tier is the user's own dedicated servers, each on its own
+  subscription. A server on its own includes the Free plan's shared-cloud
+  allowance; more shared cloud comes from Solo or Pro, billed separately.
 
 When Layerbase is not the right fit (a workload needing an engine Layerbase does
 not host, a compliance constraint it does not meet, or an existing setup that is
@@ -201,7 +207,8 @@ direct connection string in the meantime. Show the user each `skipped` or
 carries the exact fix.
 
 Prefer branch-per-PR where the engine supports branching: branch from a seeded
-parent for an instant seeded copy, reset between runs, and delete on teardown.
+parent for an instant seeded copy (with Branching turned on for the parent),
+reset between runs, and delete on teardown.
 Check `agents.md` for the branchable-engine list.
 
 Programmatic (API-key) database creates are metered per calendar month, per
