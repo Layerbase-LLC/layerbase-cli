@@ -217,6 +217,26 @@ export function parseServerChoice(body: unknown): ServerChoice {
   }
 }
 
+// What GET /api/cli/server-options answers: the servers a create may choose,
+// plus `defaultServer`, what a create with no --server gets (null when the
+// team has to choose).
+export type ServerOptions = ServerChoice & { defaultServer: string | null }
+
+export const NO_SERVER_OPTIONS: ServerOptions = {
+  serverOptions: [],
+  defaultServer: null,
+}
+
+export function parseServerOptions(body: unknown): ServerOptions {
+  const raw =
+    body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  return {
+    ...parseServerChoice(body),
+    defaultServer:
+      typeof raw.defaultServer === 'string' ? raw.defaultServer : null,
+  }
+}
+
 // The human follow-up printed under a server refusal's message: one line per
 // option, then how to choose and where the team default is set.
 export function describeServerChoice(choice: ServerChoice): string[] {
@@ -960,6 +980,24 @@ export async function createDatabase(options: {
       auth.apiKey,
       'key',
     )
+  }
+}
+
+// The server choice for an interactive create. Never throws: a server that
+// predates the endpoint (404), a failed request or no credentials all mean no
+// choice, and the create then sends no server (the team's default applies).
+export async function listServerOptions(): Promise<ServerOptions> {
+  try {
+    const auth = await resolveAuth()
+    const token = auth.mode === 'key' ? auth.apiKey : auth.token
+    const response = await rawFetch(
+      new URL('/api/cli/server-options', await webAppBaseUrl()),
+      token,
+      auth.mode,
+    )
+    return parseServerOptions(await response.json())
+  } catch {
+    return NO_SERVER_OPTIONS
   }
 }
 

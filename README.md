@@ -151,6 +151,11 @@ These refusals exit `8`. With `--json` the error object also carries
 accepting, `reason`) and `settingsUrl`. A server that is briefly unavailable
 (`server_unavailable`) exits `5`: try again shortly.
 
+In `lbase tui`, `n` on the Cloud tab opens a create form with the same choice
+as a server step (tab to it, left and right to choose), starting on the team's
+default server. Servers that are not accepting new databases are shown with the
+reason and cannot be picked; with a single option the step is skipped.
+
 ### Capacity warnings
 
 Layerbase places your databases inside shared VMs and containers. When your
