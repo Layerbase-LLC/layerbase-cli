@@ -181,6 +181,7 @@ async function createWithVersion(options: {
   version?: string
   localVersion?: string
   engineLabel: string
+  server?: string
   source: CreateSource
   acknowledgeCapacityRisk: boolean
   say: (message: string) => void
@@ -191,6 +192,7 @@ async function createWithVersion(options: {
     version,
     localVersion,
     engineLabel,
+    server,
     source,
     acknowledgeCapacityRisk,
     say,
@@ -200,6 +202,7 @@ async function createWithVersion(options: {
       name,
       engine,
       version,
+      server,
       source,
       acknowledgeCapacityRisk,
     })
@@ -225,6 +228,7 @@ async function createWithVersion(options: {
       name,
       engine,
       version: retry?.version,
+      server,
       source,
       acknowledgeCapacityRisk,
     })
@@ -264,7 +268,7 @@ async function dashboardUrl(id: string): Promise<string> {
 }
 
 // `layerbase promote <source> [--from pglite] [--target pgsqlite] [--name db]
-//  [--write-env] [--yes] [--accept-capacity-risk] [--json]`
+//  [--write-env] [--yes] [--server <s>] [--accept-capacity-risk] [--json]`
 export async function runPromote(options: {
   args: string[]
   flags: CommandFlags
@@ -386,6 +390,7 @@ export async function runPromote(options: {
           version: plan.version,
           localVersion,
           engineLabel: plan.engineLabel,
+          server: flags.server,
           source: { via: 'promote', kind: source.kind },
           acknowledgeCapacityRisk,
           say,
