@@ -2,6 +2,21 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## Unreleased
+
+### Added
+
+`lbase cloud create --server <value>` and `lbase promote --server <value>`
+choose the server a new database is created on: `shared`, or a dedicated server
+id. Without it the team's default server is used (set at
+https://layerbase.com/cloud/team-settings#default-server), then shared on a
+paid shared plan, or the team's only dedicated server. A create that needs a
+choice, or names a server that is not accepting databases or does not exist,
+is refused with the server's message, the servers you can pass and the settings
+link, and exits `8`. `--json` adds `serverOptions` and `settingsUrl` to the
+error object. A briefly unavailable server exits `5`. Omitting `--server`
+sends the same request as before.
+
 ## 2.5.2
 
 ### Changed

@@ -8,6 +8,7 @@ import {
   writeJson,
 } from '@/lib/cli-output'
 import { printConnectionInfo } from '@/lib/format'
+import { CloudApiError } from '@/lib/cloud-api'
 
 // The output boundary is where issue #53 is actually fixed: every --json
 // payload and every error line the CLI writes passes through here, so a command
@@ -126,4 +127,84 @@ test('--print honors the same switch as everything else', () => {
   setRevealSecrets(true)
   const revealed = capture(() => printConnectionInfo(info))
   assert.match(revealed, /s3cr3tpw/)
+})
+
+function serverRefusal(status: number, code: string): CloudApiError {
+  return new CloudApiError({
+    status,
+    code,
+    message: 'Choose a server for this database.',
+    body: {
+      error: 'Choose a server for this database.',
+      code,
+      serverOptions: [
+        { server: 'shared', name: 'Shared', kind: 'shared', accepting: true },
+        {
+          server: 'srv_example',
+          name: 'analytics',
+          kind: 'dedicated',
+          accepting: false,
+          reason: 'at capacity',
+        },
+        { name: 'no value, dropped', kind: 'dedicated', accepting: true },
+      ],
+      settingsUrl: 'https://example.com/cloud/team-settings#default-server',
+    },
+  })
+}
+
+test('a server refusal lists the options and how to choose', () => {
+  let code = 0
+  const stderr = captureStderr(() => {
+    code = reportError(serverRefusal(409, 'server_choice_required'), false)
+  })
+  assert.equal(code, 8)
+  assert.equal(
+    stderr,
+    [
+      'Choose a server for this database.',
+      'Servers:',
+      '  shared  Shared',
+      '  srv_example  analytics (not accepting: at capacity)',
+      'Pass --server <value> to choose one.',
+      'Set the team default server at https://example.com/cloud/team-settings#default-server',
+      '',
+    ].join('\n'),
+  )
+})
+
+test('a server refusal in --json carries serverOptions and settingsUrl', () => {
+  let code = 0
+  const stdout = capture(() => {
+    code = reportError(serverRefusal(400, 'server_not_found'), true)
+  })
+  assert.equal(code, 8)
+  const parsed = JSON.parse(stdout)
+  assert.equal(parsed.code, 'server_not_found')
+  assert.equal(parsed.serverOptions.length, 2)
+  assert.equal(parsed.serverOptions[1].reason, 'at capacity')
+  assert.equal(
+    parsed.settingsUrl,
+    'https://example.com/cloud/team-settings#default-server',
+  )
+})
+
+test('server refusal exit codes: a choice is 8, unavailable retries as 5', () => {
+  const silent = (run: () => number): number => {
+    let code = 0
+    captureStderr(() => {
+      code = run()
+    })
+    return code
+  }
+  assert.equal(
+    silent(() =>
+      reportError(serverRefusal(409, 'server_not_accepting'), false),
+    ),
+    8,
+  )
+  assert.equal(
+    silent(() => reportError(serverRefusal(503, 'server_unavailable'), false)),
+    5,
+  )
 })

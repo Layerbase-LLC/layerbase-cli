@@ -1,4 +1,10 @@
-import { CloudApiError, exitCodeForCloudError } from '@/lib/cloud-api'
+import {
+  CloudApiError,
+  describeServerChoice,
+  exitCodeForCloudError,
+  isServerRefusalCode,
+  parseServerChoice,
+} from '@/lib/cloud-api'
 import { redactConnectionUri, redactJsonSecrets } from '@/lib/redact'
 
 // Whether the user asked for secrets in the clear (`--show-secrets` / `--reveal`).
@@ -30,16 +36,23 @@ export function reportError(error: unknown, json: boolean): number {
   if (error instanceof CloudApiError) {
     const { status, code, message, body } = error.info
     const safe = forOutput(message)
+    // A create refused for its target server carries the servers it could use.
+    const serverChoice = isServerRefusalCode(code)
+      ? parseServerChoice(body)
+      : undefined
     if (json) {
       const retryAfterSeconds =
         typeof body?.retryAfterSeconds === 'number'
           ? body.retryAfterSeconds
           : undefined
       process.stdout.write(
-        `${JSON.stringify({ ok: false, error: safe, code, status, retryAfterSeconds })}\n`,
+        `${JSON.stringify({ ok: false, error: safe, code, status, retryAfterSeconds, ...serverChoice })}\n`,
       )
     } else {
-      process.stderr.write(`${safe}\n`)
+      const details = serverChoice ? describeServerChoice(serverChoice) : []
+      process.stderr.write(
+        [safe, ...details].map((line) => `${line}\n`).join(''),
+      )
     }
     return exitCodeForCloudError({ status, code })
   }
