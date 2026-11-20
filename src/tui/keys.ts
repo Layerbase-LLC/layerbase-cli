@@ -49,7 +49,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     rows: [
       { keys: 'tab', action: 'switch Local and Cloud' },
       { keys: '1  2', action: 'Local, Cloud' },
-      { keys: 'n', action: 'new local database' },
+      { keys: 'n', action: 'new database on this tab' },
       { keys: 'r', action: 'refresh' },
       { keys: '?', action: 'this list' },
     ],

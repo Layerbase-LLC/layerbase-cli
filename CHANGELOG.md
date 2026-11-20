@@ -17,6 +17,14 @@ link, and exits `8`. `--json` adds `serverOptions` and `settingsUrl` to the
 error object. A briefly unavailable server exits `5`. Omitting `--server`
 sends the same request as before.
 
+In `lbase tui`, pressing `n` on the Cloud tab now opens a cloud create form
+(with an API key signed in). When the team can create on more than one server,
+the form has a server step: tab to it and use left and right to choose. It
+starts on the team's default server; a server that is not accepting new
+databases is listed with its reason and cannot be chosen, and when the team
+has no default you pick one before the create is sent. With one option the step
+is skipped. A Layerbase server without the server list behaves as before.
+
 ## 2.5.2
 
 ### Changed
