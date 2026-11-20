@@ -41,8 +41,8 @@ const UNIFIED_HELP = `
   Cloud account
     login / logout / whoami       Manage your Layerbase session
     cloud ls                      List your cloud databases (--json to script)
-    cloud create <name> --engine <e> [--ttl 2h] [--region <r>]
-                                  Provision a database
+    cloud create <name> --engine <e> [--ttl 2h] [--region <r>] [--server <s>]
+                                  Provision a database (--server: see Servers)
                                   (--accept-capacity-risk: see Capacity warnings)
     cloud delete <db> --yes       Delete a cloud database
     cloud start / stop <db>       Start or stop a cloud database
@@ -70,11 +70,20 @@ const UNIFIED_HELP = `
     When your account container or server is under memory or storage
     pressure, "cloud create" and "promote" show a warning with the current
     usage and ask before creating. Without a terminal they exit 7 instead;
-    pass --accept-capacity-risk to create anyway. Other 409s still exit 5.
+    pass --accept-capacity-risk to create anyway. Other capacity 409s exit 5.
+
+  Servers
+    "cloud create" and "promote" take --server <value>: shared, or a dedicated
+    server id. Without it the team's default server is used (set at
+    https://layerbase.com/cloud/team-settings#default-server), then shared on a
+    paid shared plan, or the team's only dedicated server. When none applies,
+    or the server is not accepting databases, the create is refused with the
+    servers you can pass and exits 8.
 
   Exit codes
     0 success, 1 usage/generic, 3 auth, 4 account paused, 5 capacity (try
-    later), 6 quota or rate limit, 7 capacity risk not accepted
+    later), 6 quota or rate limit, 7 capacity risk not accepted, 8 server
+    choice needed (re-run with --server)
 
   Secrets
     Connection strings and passwords print redacted (user:****@host). Pass
@@ -103,10 +112,12 @@ const CLOUD_HELP = `
 
     lbase cloud ls                 List your cloud databases (--json to script)
     lbase cloud create <name> --engine <e> [--ttl 2h] [--region <r>]
-                       [--accept-capacity-risk] [--json]
+                       [--server <s>] [--accept-capacity-risk] [--json]
                                    Provision a database (--ttl makes it transient;
                                    --region picks where it runs, omit for the
-                                   default; the server lists valid regions)
+                                   default; the server lists valid regions;
+                                   --server: shared, or a dedicated server id,
+                                   defaults to the team's default server)
     lbase cloud delete <db> --yes  Delete a database (--yes to skip the prompt)
     lbase cloud start <db>         Start a database
     lbase cloud stop <db>          Stop a database
@@ -133,7 +144,15 @@ const CLOUD_HELP = `
   Capacity warnings: when your account container or server is under memory or
   storage pressure, "cloud create" prints the usage the cloud reports and asks
   before creating. With no terminal (or --json) it exits 7 and creates nothing;
-  --accept-capacity-risk creates it anyway. Other 409 refusals exit 5.
+  --accept-capacity-risk creates it anyway. Other capacity refusals exit 5.
+
+  Servers: --server <value> picks the server to create on: shared, or a
+  dedicated server id. Without it the team's default server is used (set at
+  https://layerbase.com/cloud/team-settings#default-server), then shared on a
+  paid shared plan, or the team's only dedicated server. A create that needs a
+  choice, or names a server that is not accepting databases, is refused with
+  the servers you can pass and exits 8; a server that is briefly unavailable
+  exits 5.
 `
 
 const MIGRATE_HELP = `
@@ -201,7 +220,7 @@ const PROMOTE_HELP = `
   layerbase promote - put a local database in the cloud, data included
 
     layerbase promote <file-or-container> [--target pgsqlite] [--name <db>]
-                      [--from <kind>] [--write-env] [--yes]
+                      [--from <kind>] [--write-env] [--yes] [--server <s>]
                       [--accept-capacity-risk] [--json]
 
   It creates a NEW cloud database sized to the source, imports the data, and
@@ -237,6 +256,9 @@ const PROMOTE_HELP = `
     --write-env    rewrite DATABASE_URL in ./.env (opt-in, creates the file if
                    missing, never touches other lines)
     --yes (-y)     skip the confirmation prompt
+    --server <s>   server to create on: shared, or a dedicated server id.
+                   Defaults to the team's default server; a refusal lists
+                   the servers you can pass and exits 8
     --accept-capacity-risk
                    create the database even when the cloud warns that your
                    account container or server is under memory or storage
@@ -414,6 +436,8 @@ const cli = meow(UNIFIED_HELP, {
     engine: { type: 'string' },
     ttl: { type: 'string' },
     region: { type: 'string' },
+    // cloud create / promote: the target server. Resolved by the server only.
+    server: { type: 'string' },
     yes: { type: 'boolean', default: false, shortFlag: 'y' },
     // cloud create / promote: proceed when the cloud warns the target is under
     // memory or storage pressure (exit 7 without it in a non-interactive run).

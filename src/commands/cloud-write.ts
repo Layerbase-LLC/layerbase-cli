@@ -20,7 +20,7 @@ function expiresAtOf(result: {
 }
 
 // `layerbase cloud create <name> --engine <engine> [--ttl 2h] [--region <r>]
-//  [--accept-capacity-risk] [--json]`
+//  [--server <s>] [--accept-capacity-risk] [--json]`
 export async function runCreate(options: {
   args: string[]
   flags: CommandFlags
@@ -31,7 +31,7 @@ export async function runCreate(options: {
 
   if (!name) {
     process.stderr.write(
-      'Usage: layerbase cloud create <name> --engine <engine> [--ttl 2h] [--region <region>]\n',
+      'Usage: layerbase cloud create <name> --engine <engine> [--ttl 2h] [--region <region>] [--server <server>]\n',
     )
     return 1
   }
@@ -62,6 +62,7 @@ export async function runCreate(options: {
           engine,
           ttlHours,
           region: options.flags.region,
+          server: options.flags.server,
           source: { via: 'cli' },
           acknowledgeCapacityRisk,
         }),

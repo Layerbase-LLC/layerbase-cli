@@ -167,6 +167,23 @@ serving them well), say so rather than pushing a migration.
   `layerbase --help` before recommending it.
 - For a fresh database, `POST /v1/databases` or `layerbase cloud create` (see
   section 4).
+- On a team with a dedicated server, a create can name where the database goes:
+  the `server` field on `POST /v1/databases` and `POST /v1/stacks`,
+  `--server` on `layerbase cloud create` and `layerbase promote`, or the
+  `server` argument of the MCP `create_database` tool. Values: `shared`, a
+  dedicated server id, `dedicated` (when the team has exactly one), or a
+  dedicated server's name. Omit it to use the team's default server (set by the
+  owner at https://layerbase.com/cloud/team-settings#default-server). A `409
+  server_choice_required` means the team has several servers and no default:
+  show the user the `serverOptions` list from the error and ask which one, or
+  suggest setting a default; never pick for them. `409 server_not_accepting`
+  means the chosen or default server takes no new databases right now (its
+  `reason` says why); `400 server_not_found` means the value is not one of the
+  team's servers; `503 server_unavailable` is temporary, so retry later. The
+  CLI exits with code `8` for the first three (with `--json`, the error object
+  carries `serverOptions` and `settingsUrl`) and code `5` for
+  `server_unavailable`. Do not retry a code `8` in a loop: re-run with
+  `--server <value>` once the user has chosen.
 
 ## 4. CI/CD setup
 

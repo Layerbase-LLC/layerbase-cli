@@ -141,13 +141,120 @@ export const EXIT_CAPACITY_RISK = 7
 
 export const CAPACITY_RISK_CODE = 'capacity_risk_unacknowledged'
 
+// 8: a create was refused because it needs a server choice the cloud could
+// not make: no explicit or default server applies, the chosen server is not
+// accepting new databases, or the --server value matches no server. Distinct
+// from 5 on purpose: 5 means "try later", 8 means "re-run with --server".
+export const EXIT_SERVER_CHOICE = 8
+
+export const SERVER_CHOICE_CODES: ReadonlySet<string> = new Set([
+  'server_choice_required',
+  'server_not_accepting',
+  'server_not_found',
+])
+
+// The chosen server is temporarily unreachable: retryable, so it shares 5.
+export const SERVER_UNAVAILABLE_CODE = 'server_unavailable'
+
 // Status-based mapping plus the typed codes that need their own exit code.
 export function exitCodeForCloudError(info: {
   status: number
   code?: string
 }): number {
   if (info.code === CAPACITY_RISK_CODE) return EXIT_CAPACITY_RISK
+  if (info.code && SERVER_CHOICE_CODES.has(info.code)) {
+    return EXIT_SERVER_CHOICE
+  }
+  if (info.code === SERVER_UNAVAILABLE_CODE) return exitCodeForStatus(409)
   return exitCodeForStatus(info.status)
+}
+
+// One server a create can target, as listed on a server-choice refusal.
+// `server` is the value to pass to --server.
+export type ServerOption = {
+  server: string
+  name: string
+  kind: 'shared' | 'dedicated'
+  accepting: boolean
+  reason?: string
+}
+
+export type ServerChoice = {
+  serverOptions: ServerOption[]
+  settingsUrl?: string
+}
+
+export function isServerRefusalCode(code: string | undefined): boolean {
+  return Boolean(
+    code && (SERVER_CHOICE_CODES.has(code) || code === SERVER_UNAVAILABLE_CODE),
+  )
+}
+
+// Defensive parse: entries without a usable `server` value are dropped, so a
+// malformed body still prints the server's own message and whatever is valid.
+export function parseServerChoice(body: unknown): ServerChoice {
+  const raw =
+    body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  const options: ServerOption[] = []
+  if (Array.isArray(raw.serverOptions)) {
+    for (const entry of raw.serverOptions) {
+      if (!entry || typeof entry !== 'object') continue
+      const option = entry as Record<string, unknown>
+      if (typeof option.server !== 'string' || !option.server) continue
+      options.push({
+        server: option.server,
+        name: typeof option.name === 'string' ? option.name : option.server,
+        kind: option.kind === 'dedicated' ? 'dedicated' : 'shared',
+        accepting: option.accepting !== false,
+        reason: typeof option.reason === 'string' ? option.reason : undefined,
+      })
+    }
+  }
+  return {
+    serverOptions: options,
+    settingsUrl:
+      typeof raw.settingsUrl === 'string' ? raw.settingsUrl : undefined,
+  }
+}
+
+// What GET /api/cli/server-options answers: the servers a create may choose,
+// plus `defaultServer`, what a create with no --server gets (null when the
+// team has to choose).
+export type ServerOptions = ServerChoice & { defaultServer: string | null }
+
+export const NO_SERVER_OPTIONS: ServerOptions = {
+  serverOptions: [],
+  defaultServer: null,
+}
+
+export function parseServerOptions(body: unknown): ServerOptions {
+  const raw =
+    body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  return {
+    ...parseServerChoice(body),
+    defaultServer:
+      typeof raw.defaultServer === 'string' ? raw.defaultServer : null,
+  }
+}
+
+// The human follow-up printed under a server refusal's message: one line per
+// option, then how to choose and where the team default is set.
+export function describeServerChoice(choice: ServerChoice): string[] {
+  const lines: string[] = []
+  if (choice.serverOptions.length > 0) {
+    lines.push('Servers:')
+    for (const option of choice.serverOptions) {
+      const status = option.accepting
+        ? ''
+        : ` (not accepting${option.reason ? `: ${option.reason}` : ''})`
+      lines.push(`  ${option.server}  ${option.name}${status}`)
+    }
+    lines.push('Pass --server <value> to choose one.')
+  }
+  if (choice.settingsUrl) {
+    lines.push(`Set the team default server at ${choice.settingsUrl}`)
+  }
+  return lines
 }
 
 // The pressure object the cloud attaches to a capacity refusal (and returns
@@ -262,6 +369,10 @@ function mapErrorMessage(
   mode: 'key' | 'jwt',
 ): string {
   // Typed codes carry the clearest intent regardless of their HTTP status.
+  // The server's own text for a server refusal already names the options.
+  if (isServerRefusalCode(code) && serverMessage) {
+    return serverMessage
+  }
   if (code === 'invalid_ttl') {
     return (
       serverMessage || '--ttl must be a whole number of hours between 1 and 72.'
@@ -743,6 +854,7 @@ export function buildCreateDatabaseBody(options: {
   version?: string
   ttlHours?: number
   region?: string
+  server?: string
   source?: CreateSource
   acknowledgeCapacityRisk?: boolean
 }): Record<string, unknown> {
@@ -771,6 +883,12 @@ export function buildCreateDatabaseBody(options: {
   // an unknown or plan-restricted region with a message to show as-is.
   if (options.region) {
     body.region = options.region
+  }
+  // Omitted when not asked for: the server then uses the team's default
+  // server, or its automatic default. The server resolves and checks the value
+  // ('shared', a dedicated server id or name, or 'dedicated').
+  if (options.server) {
+    body.server = options.server
   }
   const via = options.source?.via
   if (typeof via === 'string' && SOURCE_TOKEN_PATTERN.test(via)) {
@@ -828,6 +946,7 @@ export async function createDatabase(options: {
   version?: string
   ttlHours?: number
   region?: string
+  server?: string
   source?: CreateSource
   acknowledgeCapacityRisk?: boolean
 }): Promise<CreateDatabaseResult> {
@@ -861,6 +980,24 @@ export async function createDatabase(options: {
       auth.apiKey,
       'key',
     )
+  }
+}
+
+// The server choice for an interactive create. Never throws: a server that
+// predates the endpoint (404), a failed request or no credentials all mean no
+// choice, and the create then sends no server (the team's default applies).
+export async function listServerOptions(): Promise<ServerOptions> {
+  try {
+    const auth = await resolveAuth()
+    const token = auth.mode === 'key' ? auth.apiKey : auth.token
+    const response = await rawFetch(
+      new URL('/api/cli/server-options', await webAppBaseUrl()),
+      token,
+      auth.mode,
+    )
+    return parseServerOptions(await response.json())
+  } catch {
+    return NO_SERVER_OPTIONS
   }
 }
 

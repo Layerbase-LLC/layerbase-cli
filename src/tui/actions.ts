@@ -134,11 +134,14 @@ export async function createLocalBranch(options: {
 export async function createCloudDatabase(options: {
   name: string
   engine: string
+  // 'shared' or a dedicated server id; absent = the team's default server.
+  server?: string
 }): Promise<ActionResult> {
   try {
     const created = await createDatabase({
       name: options.name,
       engine: options.engine,
+      server: options.server,
       source: { via: 'cli' },
     })
     return { ok: true, name: created.name }
@@ -155,7 +158,9 @@ export async function createCloudDatabase(options: {
           `Capacity warning: ${summary}. Not created. Adding a database ` +
           'here risks slowdowns, crashes, or data loss. To accept that risk, ' +
           `run: lbase cloud create ${options.name} --engine ` +
-          `${options.engine} --accept-capacity-risk`,
+          `${options.engine}` +
+          (options.server ? ` --server ${options.server}` : '') +
+          ' --accept-capacity-risk',
       }
     }
     const message =

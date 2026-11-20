@@ -18,7 +18,9 @@ import {
 import { findLayerbaseDesktop, type DesktopLaunch } from '@/tui/launch'
 import { engineLabel, LOCAL_ENGINES } from '@/tui/engines'
 import { FormView } from '@/tui/form'
-import { loadCloud, loadLocal, loadSession } from '@/tui/load'
+import { loadCloud, loadCloudEngines, loadLocal, loadSession } from '@/tui/load'
+import { listServerOptions, type ServerOptions } from '@/lib/cloud-api'
+import { serverForCreate } from '@/tui/servers'
 import { signInWithApiKey, signInWithBrowser } from '@/tui/sign-in'
 import {
   ageLabel,
@@ -80,6 +82,8 @@ type Screen =
       kind: 'form'
       mode: 'local' | 'cloud' | 'branch'
       engines: string[] | null
+      // Cloud create: the team's servers, or null when none could be read.
+      servers?: ServerOptions | null
     }
   | {
       kind: 'download'
@@ -389,7 +393,11 @@ export function TuiApp(props: {
   const cloudLocked = signedOut || Boolean(session.keyRejected)
   const authPanel = tab === 'cloud' && (cloudLocked || signIn !== null)
 
-  async function submitForm(value: { name: string; engine: string | null }) {
+  async function submitForm(value: {
+    name: string
+    engine: string | null
+    serverIndex: number | null
+  }) {
     if (screen.kind !== 'form') return
     if (!value.name) {
       setFormError('Name is required.')
@@ -397,6 +405,14 @@ export function TuiApp(props: {
     }
     if (screen.engines && !value.engine) {
       setFormError('Pick an engine.')
+      return
+    }
+    const server = serverForCreate({
+      choice: screen.mode === 'cloud' ? (screen.servers ?? null) : null,
+      index: value.serverIndex,
+    })
+    if (!server.ok) {
+      setFormError(server.message)
       return
     }
     setBusy(true)
@@ -411,6 +427,7 @@ export function TuiApp(props: {
           ? await createCloudDatabase({
               name: value.name,
               engine: value.engine ?? '',
+              server: server.server,
             })
           : selectedRow?.source === 'cloud'
             ? await createCloudBranch({
@@ -527,6 +544,25 @@ export function TuiApp(props: {
         }),
       0,
     )
+  }
+
+  async function openCloudCreate() {
+    if (!canCreateCloud(session)) {
+      setBanner('Cloud create needs an API key.')
+      return
+    }
+    setBanner('Loading engines and servers...')
+    const [engines, servers] = await Promise.all([
+      loadCloudEngines(),
+      listServerOptions(),
+    ])
+    if ('error' in engines) {
+      setBanner(engines.error)
+      return
+    }
+    setBanner(null)
+    setFormError(null)
+    setScreen({ kind: 'form', mode: 'cloud', engines: engines.ids, servers })
   }
 
   function openBranch() {
@@ -842,6 +878,10 @@ export function TuiApp(props: {
         return
       }
       if (input === 'n') {
+        if (tab === 'cloud') {
+          void openCloudCreate()
+          return
+        }
         setFormError(null)
         setScreen({ kind: 'form', mode: 'local', engines: [...LOCAL_ENGINES] })
         return
@@ -1112,9 +1152,15 @@ export function TuiApp(props: {
       <FormView
         title={title}
         engines={screen.engines}
+        servers={screen.mode === 'cloud' ? screen.servers : null}
+        hint={
+          screen.mode === 'cloud'
+            ? 'enter creates it in the cloud, tab next field, esc home'
+            : undefined
+        }
         error={formError}
         busy={busy}
-        height={Math.min(6, maxBody)}
+        height={Math.min(screen.mode === 'cloud' ? 7 : 6, maxBody)}
         width={width}
         onCancel={onEscape}
         onSubmit={(value) => {

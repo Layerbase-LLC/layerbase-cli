@@ -332,3 +332,23 @@ test('isCreateRouteMissing falls back only for a web app without the route', () 
     false,
   )
 })
+
+test('create body: server travels only when chosen', () => {
+  assert.equal(
+    'server' in buildCreateDatabaseBody({ name: 'a', engine: 'postgresql' }),
+    false,
+  )
+  assert.equal(
+    'server' in
+      buildCreateDatabaseBody({ name: 'a', engine: 'postgresql', server: '' }),
+    false,
+  )
+  assert.equal(
+    buildCreateDatabaseBody({
+      name: 'a',
+      engine: 'postgresql',
+      server: 'shared',
+    }).server,
+    'shared',
+  )
+})

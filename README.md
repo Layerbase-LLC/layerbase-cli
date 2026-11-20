@@ -73,7 +73,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase logout` | Remove the stored credentials. |
 | `lbase whoami` | Show the signed-in account (and API-key usage in key mode) (`--json`). |
 | `lbase cloud ls` | List your cloud databases and branches (`--json` for scripting). |
-| `lbase cloud create <name> --engine <e> [--ttl 2h] [--region <r>]` | Provision a database (`--ttl` makes it transient; `--region` picks where it runs, omit it for the default, and the server refuses an unknown or plan-restricted region with what to do; `--accept-capacity-risk`, see [Capacity warnings](#capacity-warnings)). |
+| `lbase cloud create <name> --engine <e> [--ttl 2h] [--region <r>] [--server <s>]` | Provision a database (`--ttl` makes it transient; `--region` picks where it runs, omit it for the default, and the server refuses an unknown or plan-restricted region with what to do; `--server` picks the server, see [Choosing a server](#choosing-a-server); `--accept-capacity-risk`, see [Capacity warnings](#capacity-warnings)). |
 | `lbase cloud delete <db> --yes` | Delete a database (`--yes`/`-y` to skip the prompt). |
 | `lbase cloud start <db>` / `stop <db>` | Start or stop a database. |
 | `lbase cloud branch <db> <name>` | Create or reuse a branch (idempotent). |
@@ -87,7 +87,7 @@ These are the only verbs layerbase owns; everything else is spindb.
 | `lbase psql <db>` | Connect to a cloud Postgres-family database. |
 | `lbase redis-cli <db>` | Connect to a cloud Redis / Valkey database. |
 | `lbase mysql <db>` | Connect to a cloud MySQL / MariaDB database. |
-| `lbase promote <file-or-container>` | Create a cloud database from a local file or spindb container, data included. |
+| `lbase promote <file-or-container>` | Create a cloud database from a local file or spindb container, data included (`--server <s>`, see [Choosing a server](#choosing-a-server)). |
 | `lbase migrate --source <id> --target <db>` | Migrate an external database into a cloud database. |
 | `lbase import <dumpfile> --target <db>` | Import a dump file into a cloud database. |
 | `lbase agent init [--global]` | Install the Layerbase skill for AI coding agents. |
@@ -119,6 +119,42 @@ password and the discrete credential fields (`password`, `restToken`,
 (`create`, `delete`, `start`, `stop`, `branch`, `pooler`) run against the cloud API and
 need an API key (see [Headless auth](#headless-auth-ci-and-agents)); every one
 supports `--json` and returns a meaningful exit code.
+
+### Choosing a server
+
+`cloud create` and `promote` take `--server <value>`: the server to create on,
+either `shared` or a dedicated server id (as listed in team settings and in the
+refusal below). `dedicated` also works when the team has exactly one dedicated
+server, and so does a dedicated server's name.
+
+Without `--server`, the target is chosen in this order:
+
+1. The team's default server, set at
+   https://layerbase.com/cloud/team-settings#default-server.
+2. Shared, when the team owner has a paid shared plan.
+3. The team's dedicated server, for a team with only one dedicated server.
+
+When none of these applies, the create is refused and nothing is created. The
+same happens when the chosen server is not accepting new databases or matches
+no server. The CLI prints the server's message, then the servers you can pass:
+
+```
+Servers:
+  shared  Shared
+  <server-id>  <server name> (not accepting: <reason>)
+Pass --server <value> to choose one.
+Set the team default server at https://layerbase.com/cloud/team-settings#default-server
+```
+
+These refusals exit `8`. With `--json` the error object also carries
+`serverOptions` (each with `server`, `name`, `kind`, `accepting` and, when not
+accepting, `reason`) and `settingsUrl`. A server that is briefly unavailable
+(`server_unavailable`) exits `5`: try again shortly.
+
+In `lbase tui`, `n` on the Cloud tab opens a create form with the same choice
+as a server step (tab to it, left and right to choose), starting on the team's
+default server. Servers that are not accepting new databases are shown with the
+reason and cannot be picked; with a single option the step is skipped.
 
 ### Capacity warnings
 
@@ -376,7 +412,8 @@ Exit codes for scripting: `0` success, `1` usage/generic, `3` auth (invalid or
 revoked key), `4` account paused, `5` capacity (try again later), `6` quota or
 rate limit, `7` capacity risk not accepted (the target is under memory or
 storage pressure; re-run with `--accept-capacity-risk` to create anyway, see
-[Capacity warnings](#capacity-warnings)).
+[Capacity warnings](#capacity-warnings)), `8` server choice needed (re-run with
+`--server`, see [Choosing a server](#choosing-a-server)).
 
 ## Agents
 
