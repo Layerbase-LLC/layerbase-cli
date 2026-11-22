@@ -1,19 +1,27 @@
-# layerbase
+# Layerbase CLI
+
+<p align="center">
+  <a href="https://layerbase.com/docs/cli">
+    <img src="https://raw.githubusercontent.com/Layerbase-LLC/layerbase-cli/main/assets/social-preview.png" alt="Layerbase CLI: build locally, promote to the cloud" width="100%" />
+  </a>
+</p>
 
 [![npm version](https://img.shields.io/npm/v/layerbase.svg)](https://www.npmjs.com/package/layerbase)
-[![license](https://img.shields.io/npm/l/layerbase.svg)](https://www.npmjs.com/package/layerbase)
+[![npm downloads](https://img.shields.io/npm/dm/layerbase.svg)](https://www.npmjs.com/package/layerbase)
+[![license](https://img.shields.io/npm/l/layerbase.svg)](#license)
 
-The Layerbase CLI is **local-first**: it is a drop-in for
-[spindb](https://github.com/robertjbass/spindb) for local database work, plus a
-`cloud` layer for your managed [**Layerbase cloud**](https://layerbase.com)
-account. Connect with native
-clients, drop into spindb, and never paste a connection string into your shell
-history.
+**One CLI for local and cloud databases.**
 
-**The bare command namespace belongs to spindb.** Any command that is not one of
-layerbase's own verbs forwards straight to your local spindb install, verbatim,
-so `lbase create / ls / start / backup / branch ...` behave exactly like
-`spindb <same>`. Cloud database commands live under `lbase cloud <verb>`.
+Moving a database from your laptop to the cloud usually means new tools, a dump and restore, and passwords in your shell history. The Layerbase CLI handles both sides: build locally, then promote to [Layerbase Cloud](https://layerbase.com) with your data.
+
+- **Run databases locally:** every [spindb](https://github.com/robertjbass/spindb) command works, with no account
+- **Promote in one command:** SQLite, DuckDB, SQL dumps and supported local databases, data included
+- **Connect safely:** open `psql`, `mysql` or `redis-cli` without typing a password or pasting a connection string
+- **Branch cloud databases:** create, reset and delete a copy per feature or pull request
+- **Migrate from elsewhere:** Neon, Supabase, PlanetScale, Railway, Upstash and more
+- **Built for CI and agents:** API keys, JSON output, meaningful exit codes and an installable agent skill
+
+[Install](#install) | [Quick start](#quick-start) | [Commands](#cloud-account) | [Promote](#promote-a-local-database-to-the-cloud) | [Migrate](#migrations-and-imports) | [CI and agents](#headless-auth-ci-and-agents) | [License](#license)
 
 ## Install
 
@@ -31,13 +39,22 @@ This installs two commands, `layerbase` and a shorter `lbase`. For a two-letter
 ## Quick start
 
 ```bash
-lbase                        # database browser (local and cloud, in a terminal)
-lbase create my-db --engine postgres   # any spindb command, verbatim
-lbase login                  # sign in through your browser
-lbase promote ./app.db       # put a local database in the cloud, data included
+# Local: no account needed
+lbase create my-db --engine postgresql --start
+
+# Cloud: save an API key from https://layerbase.com/cloud/settings
+lbase login --api-key sk_...
+lbase promote my-db          # create it in the cloud, data included
 lbase cloud ls               # list your cloud databases
-lbase psql my-cloud-db       # connect with the right client, no password typed
+lbase psql <cloud-db>        # connect, no password typed
 ```
+
+Run `lbase` by itself to browse local and cloud databases in your terminal.
+`lbase login` without a key signs in through your browser, which is enough to
+list and connect. Promote needs an API key to import your data.
+
+**The rule: bare commands are local, `lbase cloud <verb>` is cloud.** So
+`lbase ls` lists local databases and `lbase cloud ls` lists cloud ones.
 
 ## Local databases (drop-in for spindb)
 
@@ -47,12 +64,12 @@ Every spindb command works. Anything that is not a layerbase verb (see the
 exit code preserved:
 
 ```bash
-lbase create my-db --engine postgres   # == spindb create my-db --engine postgres
-lbase ls                                # == spindb list
-lbase start my-db                       # == spindb start my-db
-lbase backup my-db                      # == spindb backup my-db
-lbase branch my-db feature-x            # == spindb branch my-db feature-x
-lbase <cmd> --help                      # == spindb <cmd> --help
+lbase create my-db --engine postgresql    # == spindb create my-db --engine postgresql
+lbase ls                                 # == spindb list
+lbase start my-db                        # == spindb start my-db
+lbase backup my-db                       # == spindb backup my-db
+lbase branch my-db feature-x             # == spindb branch my-db feature-x
+lbase <cmd> --help                       # == spindb <cmd> --help
 ```
 
 Bare `lbase` with no arguments opens the database browser (`lbase tui`) only
@@ -449,7 +466,7 @@ containers; `layerbase` adds the cloud account layer around it.
 
 ```bash
 layerbase spindb                  # open spindb's own menu
-layerbase spindb create postgres  # run any spindb command locally
+layerbase spindb create my-db     # run any spindb command locally
 ```
 
 spindb is found on your `PATH`, or run through `npx` / `pnpx` / `bunx` if it is
@@ -506,7 +523,7 @@ alone and suggests a shell alias instead.
 
 ## Requirements
 
-- Node.js 20 or newer.
+- Node.js 20 or newer (22 or newer for local commands, which run spindb).
 - For `cloud connect` / `psql` / `redis-cli` / `mysql`: the matching native
   client on your `PATH`.
 
@@ -522,4 +539,8 @@ command. See `CLAUDE.md` for the full contract.
 
 ## License
 
-ISC, [Layerbase, LLC](https://layerbase.com).
+This CLI is ISC licensed, [Layerbase, LLC](https://layerbase.com).
+
+Local commands run [spindb](https://github.com/robertjbass/spindb), a separate
+program under [PolyForm Noncommercial 1.0.0](https://github.com/robertjbass/spindb/blob/main/LICENSE).
+Commercial use of spindb requires a separate license.
