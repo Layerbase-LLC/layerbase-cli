@@ -2,6 +2,17 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.6.2
+
+### Fixed
+
+`lbase promote` checks for an API key before it does anything. In the rare case
+where a browser login could not save one, it now explains how to get a key
+instead of creating an empty database and then failing the import.
+
+Corrected the 2.6.1 README, which said promote needs a manually created API
+key. A normal `lbase login` saves one for you.
+
 ## 2.6.1
 
 ### Changed
