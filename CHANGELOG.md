@@ -2,6 +2,15 @@
 
 Notable changes to the `layerbase` CLI. Newest first.
 
+## 2.6.1
+
+### Changed
+
+Redesigned the README with a banner, a plain summary and a Quick Start that
+saves the API key `promote` needs. Documented spindb's separate license and
+Node.js requirement, and updated the package description. Refreshed the bundled
+agent skill from layerbase.com. No command behavior changes.
+
 ## 2.6.0
 
 ### Added
