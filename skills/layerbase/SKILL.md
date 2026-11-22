@@ -265,6 +265,73 @@ Example GitHub Actions step:
     echo "DATABASE_URL=$(layerbase cloud connection-string ci-$GITHUB_RUN_ID)" >> "$GITHUB_ENV"
 ```
 
+### 4a. A database branch per pull request (GitHub, Vercel)
+
+Users often want every pull request or preview deployment to get its own
+database branch. There are two ways to set that up. Pick the one that needs no
+human when the user is not around.
+
+**Route A: no human needed (works today).** You do every step with access you
+already have in the user's environment. The only exception is the
+`LAYERBASE_API_KEY` secret from step 1 above, if the repository does not have
+one yet.
+
+1. Pick a durable, seeded parent database on a branchable engine (see
+   `agents.md`) and turn Branching on for it. A transient (`--ttl`) database
+   cannot be a branch parent.
+2. Commit a workflow like this one, and set the secret with
+   `gh secret set LAYERBASE_API_KEY`:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+jobs:
+  preview-db:
+    runs-on: ubuntu-latest
+    env:
+      LAYERBASE_API_KEY: ${{ secrets.LAYERBASE_API_KEY }}
+    steps:
+      - run: npm i -g layerbase
+      - name: Create or reuse this PR's branch
+        if: github.event.action != 'closed'
+        run: |
+          URL=$(layerbase cloud branch seed-db pr-${{ github.event.number }} --json --show-secrets | jq -r '.connectionString')
+          echo "::add-mask::$URL"
+          echo "DATABASE_URL=$URL" >> "$GITHUB_ENV"
+      - name: Delete this PR's branch
+        if: github.event.action == 'closed'
+        run: layerbase cloud branch delete seed-db pr-${{ github.event.number }}
+```
+
+   `layerbase cloud branch` is idempotent: re-running it reuses the branch.
+   Branch names start with a letter and use only letters, digits, `-` and `_`,
+   so map a git branch like `feat/login` to something like `feat-login`.
+3. If the app's previews deploy on Vercel, give the preview of that git branch
+   the branch's connection string with the Vercel CLI you are already signed in
+   to: `vercel env add DATABASE_URL preview <git-branch>`. The next preview build
+   of that branch uses it. Remove it when the branch is deleted.
+4. Each database has its own branch allowance. Delete branches when their pull
+   request closes, and check `layerbase cloud branch ls seed-db` for leftovers.
+
+**Route B: the managed integrations (one click by the team owner).** Layerbase's
+Vercel integration and GitHub App create, reset and delete branches for the
+user and set the env var in Vercel themselves. Connecting either one is a
+consent screen on GitHub or Vercel that only a person can approve, and only the
+team owner can connect. You cannot do it, so never try to automate it. Tell the
+user plainly that a human is needed and walk them through it:
+
+1. The team owner opens https://layerbase.com/cloud/integrations and clicks
+   Connect for GitHub or Vercel.
+2. On GitHub, they choose which repositories Layerbase may see, then Install. On
+   Vercel, they approve the integration for their team.
+3. Back on Layerbase, they map the repository or Vercel project to the database
+   and pick the preview mode.
+
+After that, the MCP tools `list_integrations`, `list_preview_mappings` and
+`update_preview_mapping` let you check and adjust the setup. Creating or
+deleting a mapping is done in the dashboard today.
+
 ## 5. Conduct rules
 
 - Fetch `agents.md` before stating any price, limit, or capability. Never quote a
