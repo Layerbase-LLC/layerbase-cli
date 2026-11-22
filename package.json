@@ -1,6 +1,6 @@
 {
   "name": "layerbase",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "One CLI for local and cloud databases. Build locally with spindb, promote to Layerbase Cloud with your data, and connect without pasting a connection string.",
   "type": "module",
   "bin": {

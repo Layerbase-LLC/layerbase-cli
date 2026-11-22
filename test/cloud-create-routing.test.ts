@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -36,6 +36,8 @@ function mockFetch(handler: (url: string) => Response): void {
   calls.length = 0
   globalThis.fetch = (async (input: URL | string, init?: RequestInit) => {
     const url = String(input)
+    // Local module assets (ink's layout WebAssembly) still load for real.
+    if (!url.startsWith('http')) return realFetch(input, init)
     calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null })
     return handler(url)
   }) as typeof fetch
@@ -125,4 +127,28 @@ test('a per-database 404 on the API host is retried through the web app', async 
       `https://web.example.com/api/cli/v1/databases/${id}/stop`,
     ],
   )
+})
+
+test('promote with a token-only login refuses before creating anything', async () => {
+  const { saveCredentials, clearCredentials } = await import('@/lib/config')
+  const { runPromote } = await import('@/commands/promote')
+  const source = join(home, 'app.sql')
+  await writeFile(source, 'CREATE TABLE t (id int);\n')
+  await saveCredentials({
+    apiUrl: 'https://web.example.com',
+    token: 'browser-token',
+  })
+  const envKey = process.env.LAYERBASE_API_KEY
+  delete process.env.LAYERBASE_API_KEY
+  cloudApi.configureCloudAuth({ apiKey: '' })
+  mockFetch(() => answer(500, { error: 'no request expected' }))
+
+  try {
+    assert.equal(await runPromote({ args: [source], flags: { yes: true } }), 1)
+    assert.deepEqual(calls, [])
+  } finally {
+    cloudApi.configureCloudAuth({ apiKey: 'sk_test' })
+    if (envKey !== undefined) process.env.LAYERBASE_API_KEY = envKey
+    await clearCredentials()
+  }
 })

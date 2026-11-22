@@ -42,16 +42,16 @@ This installs two commands, `layerbase` and a shorter `lbase`. For a two-letter
 # Local: no account needed
 lbase create my-db --engine postgresql --start
 
-# Cloud: save an API key from https://layerbase.com/cloud/settings
-lbase login --api-key sk_...
+# Cloud
+lbase login                  # sign in through your browser
 lbase promote my-db          # create it in the cloud, data included
 lbase cloud ls               # list your cloud databases
 lbase psql <cloud-db>        # connect, no password typed
 ```
 
 Run `lbase` by itself to browse local and cloud databases in your terminal.
-`lbase login` without a key signs in through your browser, which is enough to
-list and connect. Promote needs an API key to import your data.
+`lbase login` also saves your account's API key, which promote uses to import
+your data. With no browser, use `lbase login --api-key <key>` instead.
 
 **The rule: bare commands are local, `lbase cloud <verb>` is cloud.** So
 `lbase ls` lists local databases and `lbase cloud ls` lists cloud ones.

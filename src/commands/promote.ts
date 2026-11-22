@@ -7,6 +7,7 @@ import {
   getConnectionInfo,
   listDatabases,
   listEngines,
+  resolveApiKey,
   webAppBaseUrl,
 } from '@/lib/cloud-api'
 import type { CreateDatabaseResult, CreateSource } from '@/lib/cloud-api'
@@ -292,6 +293,20 @@ export async function runPromote(options: {
   const targetChoice = parseSqliteTarget(flags.target)
   if (!targetChoice.ok) {
     return reportError(new Error(targetChoice.error), json)
+  }
+
+  // Create accepts a browser token but import needs a key, so without this a
+  // token-only login strands an empty database.
+  if (!(await resolveApiKey())) {
+    return reportError(
+      new Error(
+        'Promote needs a Layerbase API key to import your data, and none is ' +
+          'saved. Nothing was created. Run `layerbase login` to save one, or ' +
+          'create a key at https://layerbase.com/cloud/settings and run ' +
+          '`layerbase login --api-key <key>`.',
+      ),
+      json,
+    )
   }
 
   // 1. Detect the source: filesystem facts + the local spindb container list.
